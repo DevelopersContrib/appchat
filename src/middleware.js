@@ -25,6 +25,12 @@ export async function middleware(request) {
     return NextResponse.next();
   }
 
+  const segments = pathname.split('/').filter(Boolean);
+  const isDomainPage = segments.length === 1 && !['admin', 'onboard', 'select-org'].includes(segments[0]);
+  if (isDomainPage) {
+    return NextResponse.next();
+  }
+
   const token = request.cookies.get('appchat_session')?.value;
   if (!token) {
     return NextResponse.redirect(new URL('/login', request.url));
