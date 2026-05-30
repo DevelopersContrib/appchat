@@ -1,23 +1,25 @@
 import { NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth.js';
 import { unfurlUrl } from '@/lib/unfurl.js';
+import { rateLimit, getClientIp, sanitizeUrl } from '@/lib/security.js';
 
 export async function POST(request) {
   try {
-    await requireSession();
+    const user = await requireSession();
+    const ip = getClientIp(request);
+
+    if (!rateLimit(`unfurl:${user.id}`, 20, 60000)) {
+      return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+    }
+
     const { url } = await request.json();
+    const safeUrl = sanitizeUrl(url);
 
-    if (!url) {
-      return NextResponse.json({ error: 'URL required' }, { status: 400 });
+    if (!safeUrl) {
+      return NextResponse.json({ error: 'Invalid or blocked URL' }, { status: 400 });
     }
 
-    try {
-      new URL(url);
-    } catch {
-      return NextResponse.json({ error: 'Invalid URL' }, { status: 400 });
-    }
-
-    const preview = await unfurlUrl(url);
+    const preview = await unfurlUrl(safeUrl);
     if (!preview) {
       return NextResponse.json({ error: 'Could not fetch preview' }, { status: 404 });
     }

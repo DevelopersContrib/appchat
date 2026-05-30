@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth.js';
 import { query, insert, queryOne } from '@/lib/db.js';
 import { unfurlUrl } from '@/lib/unfurl.js';
+import { rateLimit, getClientIp, sanitizeString, sanitizeUrl } from '@/lib/security.js';
 
 export async function GET(request, { params }) {
   try {
@@ -58,9 +59,17 @@ export async function POST(request, { params }) {
   try {
     const user = await requireSession();
     const { id: channelId } = await params;
-    const { body, threadId, attachments } = await request.json();
+    const ip = getClientIp(request);
+    if (!rateLimit(`msg:${user.id}`, 30, 60000)) {
+      return NextResponse.json({ error: 'Too many messages. Slow down.' }, { status: 429 });
+    }
 
-    if (!body?.trim()) {
+    const raw = await request.json();
+    const body = sanitizeString(raw.body, 10000);
+    const threadId = raw.threadId;
+    const attachments = raw.attachments;
+
+    if (!body) {
       return NextResponse.json({ error: 'Message body required' }, { status: 400 });
     }
 

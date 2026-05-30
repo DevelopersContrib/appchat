@@ -19,7 +19,10 @@ export async function GET(request) {
 
     await saveToken(state.userId, tokenData);
 
-    return NextResponse.redirect(new URL(state.returnTo || '/', request.url));
+    let returnTo = state.returnTo || '/';
+    if (!returnTo.startsWith('/') || returnTo.startsWith('//')) returnTo = '/';
+
+    return NextResponse.redirect(new URL(returnTo, request.url));
   } catch (err) {
     return NextResponse.redirect(new URL('/?error=gdrive_callback_failed', request.url));
   }

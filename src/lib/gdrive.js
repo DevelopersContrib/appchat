@@ -102,8 +102,8 @@ export async function listFiles(accessToken, { folderId, query: q, pageSize = 20
   };
 
   const queryParts = ["trashed = false"];
-  if (folderId) queryParts.push(`'${folderId}' in parents`);
-  if (q) queryParts.push(`name contains '${q}'`);
+  if (folderId) queryParts.push(`'${folderId.replace(/'/g, "\\'")}' in parents`);
+  if (q) queryParts.push(`name contains '${q.replace(/'/g, "\\'").slice(0, 100)}'`);
   params.q = queryParts.join(' and ');
 
   if (pageToken) params.pageToken = pageToken;

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth.js';
 import { insert, queryOne, query } from '@/lib/db.js';
+import { validateSlug, validateEmail, sanitizeString, rateLimit, getClientIp } from '@/lib/security.js';
 
 export async function POST(request) {
   try {
@@ -12,8 +13,13 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Name and slug required' }, { status: 400 });
     }
 
-    if (!/^[a-z0-9][a-z0-9-]*$/.test(slug)) {
-      return NextResponse.json({ error: 'Slug must be lowercase letters, numbers, and hyphens' }, { status: 400 });
+    const ip = getClientIp(request);
+    if (!rateLimit(`tenant:${user.id}`, 5, 300000)) {
+      return NextResponse.json({ error: 'Too many workspaces created. Try again later.' }, { status: 429 });
+    }
+
+    if (!validateSlug(slug)) {
+      return NextResponse.json({ error: 'Invalid slug. Must be 2-63 chars, lowercase alphanumeric and hyphens. Cannot use reserved names.' }, { status: 400 });
     }
 
     const existing = await queryOne('SELECT id FROM tenants WHERE slug = ?', [slug]);
@@ -59,7 +65,7 @@ export async function POST(request) {
 
     if (inviteEmails?.length) {
       for (const email of inviteEmails) {
-        if (!email?.trim()) continue;
+        if (!email?.trim() || !validateEmail(email.trim())) continue;
 
         let invitedUser = await queryOne('SELECT id FROM users WHERE email = ?', [email.trim()]);
         if (!invitedUser) {

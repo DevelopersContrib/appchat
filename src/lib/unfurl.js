@@ -1,5 +1,9 @@
+import { isInternalUrl } from './security.js';
+
 export async function unfurlUrl(url) {
   try {
+    if (isInternalUrl(url)) return null;
+
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
 

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/admin.js';
 import { query, insert, queryOne } from '@/lib/db.js';
+import { validateEmail, sanitizeString } from '@/lib/security.js';
 
 export async function GET(request) {
   try {
@@ -43,8 +44,8 @@ export async function POST(request) {
     await requireAdmin();
     const { email, name, isAdmin } = await request.json();
 
-    if (!email?.trim()) {
-      return NextResponse.json({ error: 'Email required' }, { status: 400 });
+    if (!email?.trim() || !validateEmail(email.trim())) {
+      return NextResponse.json({ error: 'Valid email required' }, { status: 400 });
     }
 
     const existing = await queryOne('SELECT id FROM users WHERE email = ?', [email.trim()]);
