@@ -49,13 +49,13 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <img src="https://www.brandidentity.com/logo/appchat.com" alt="AppChat" className="h-10 mx-auto" />
-          <p className="text-gray-400 mt-2 text-sm">Sign in with your email</p>
+          <p className="text-[#2d3436]/50 mt-2 text-sm">Sign in with your email</p>
         </div>
 
         {sent ? (
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 text-center">
-            <p className="text-green-400 font-medium">Check your email</p>
-            <p className="text-gray-400 text-sm mt-2">
+          <div className="bg-white border border-[#00b894]/30 rounded-xl p-6 text-center">
+            <p className="text-[#00b894] font-medium">Check your email</p>
+            <p className="text-[#2d3436]/60 text-sm mt-2">
               We sent a magic link to <strong>{email}</strong>
             </p>
           </div>
@@ -67,13 +67,13 @@ export default function LoginPage() {
               placeholder="you@company.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg focus:outline-none focus:border-blue-500 text-sm"
+              className="w-full px-4 py-3 bg-white border border-[#2d3436]/20 rounded-lg focus:outline-none focus:border-[#d63031] text-sm text-[#2d3436]"
             />
-            {error && <p className="text-red-400 text-sm">{error}</p>}
+            {error && <p className="text-[#d63031] text-sm">{error}</p>}
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded-lg font-medium text-sm transition"
+              className="w-full py-3 bg-[#d63031] hover:bg-[#c0392b] text-white disabled:opacity-50 rounded-lg font-medium text-sm transition"
             >
               {loading ? 'Sending link...' : 'Continue with Email'}
             </button>
