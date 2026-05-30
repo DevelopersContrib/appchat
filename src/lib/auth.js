@@ -23,7 +23,7 @@ export async function authenticateWithMagic(didToken) {
     await query('UPDATE users SET last_seen_at = NOW() WHERE id = ?', [user.id]);
   }
 
-  const token = await new SignJWT({ userId: user.id, email: user.email })
+  const token = await new SignJWT({ userId: user.id, email: user.email, isAdmin: !!user.is_admin })
     .setProtectedHeader({ alg: 'HS256' })
     .setExpirationTime('7d')
     .sign(JWT_SECRET);
