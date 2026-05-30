@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import LinkPreview from './LinkPreview.jsx';
 
 function formatTime(dateStr) {
   const d = new Date(dateStr);
@@ -84,6 +85,9 @@ export default function MessageList({ messages, currentUser }) {
                   </div>
                 )}
                 <p className="text-sm text-gray-300 break-words whitespace-pre-wrap">{msg.body}</p>
+                {msg.attachments?.map((att) => (
+                  <LinkPreview key={att.id} attachment={att} />
+                ))}
               </div>
             </div>
           </div>

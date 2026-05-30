@@ -29,11 +29,11 @@ export default function ChannelView({ channel, initialMessages, members, current
     return () => clearInterval(pollRef.current);
   }, [pollMessages]);
 
-  async function handleSend(body) {
+  async function handleSend(body, attachments) {
     const res = await fetch(`/api/channels/${channel.id}/messages`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ body }),
+      body: JSON.stringify({ body, attachments }),
     });
 
     if (res.ok) {
