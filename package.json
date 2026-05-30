@@ -11,24 +11,29 @@
     "db:migrate": "node migrations/run.js"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.100.1",
+    "@livekit/components-react": "^2.7.0",
+    "@livekit/components-styles": "^1.2.0",
+    "@magic-sdk/admin": "^2.4.1",
+    "bufferutil": "^4.1.0",
+    "encoding": "^0.1.13",
+    "jose": "^5.9.0",
+    "livekit-client": "^2.6.0",
+    "livekit-server-sdk": "^2.9.0",
+    "magic-sdk": "^33.7.1",
+    "mysql2": "^3.11.0",
+    "nanoid": "^5.0.9",
     "next": "^15.1.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "mysql2": "^3.11.0",
-    "@magic-sdk/admin": "^2.4.1",
-    "livekit-server-sdk": "^2.9.0",
-    "@livekit/components-react": "^2.7.0",
-    "livekit-client": "^2.6.0",
-    "@daily-co/daily-js": "^0.74.0",
-    "@daily-co/daily-react": "^0.22.0",
-    "jose": "^5.9.0",
-    "nanoid": "^5.0.9"
+    "utf-8-validate": "^6.0.6"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.0.0",
-    "tailwindcss": "^4.0.0",
-    "postcss": "^8.4.49",
     "eslint": "^9.0.0",
-    "eslint-config-next": "^15.1.0"
-  }
+    "eslint-config-next": "^15.1.0",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^4.0.0"
+  },
+  "packageManager": "pnpm@9.15.4+sha512.b2dc20e2fc72b3e18848459b37359a32064663e5627a51e4c74b2c29dd8e8e0491483c3abb40789cfd578bf362fb6ba8261b05f0387d76792ed6e23ea3b1b6a0"
 }

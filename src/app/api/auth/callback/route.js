@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { authenticateWithMagic } from '@/lib/auth.js';
-import { getUserTenants } from '@/lib/tenant.js';
 import { rateLimit, getClientIp } from '@/lib/security.js';
 
 export async function POST(request) {
@@ -15,14 +14,9 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 400 });
     }
 
-    const { user, token } = await authenticateWithMagic(didToken);
+    const { user, token } = await authenticateWithMagic(didToken, { adminOnly: true });
 
-    const tenants = await getUserTenants(user.id);
-    const redirectTo = tenants.length === 1
-      ? `/${tenants[0].slug}`
-      : tenants.length > 1
-        ? '/select-org'
-        : '/onboard';
+    const redirectTo = '/dashboard';
 
     const res = NextResponse.json({ user: { id: user.id, email: user.email }, redirectTo });
     res.cookies.set('appchat_session', token, {
@@ -35,6 +29,10 @@ export async function POST(request) {
 
     return res;
   } catch (err) {
-    return NextResponse.json({ error: 'Authentication failed' }, { status: 401 });
+    const isForbidden = err?.message === 'Admin access required';
+    return NextResponse.json(
+      { error: isForbidden ? 'Admin access required' : 'Authentication failed' },
+      { status: isForbidden ? 403 : 401 }
+    );
   }
 }

@@ -62,7 +62,7 @@ export default function PrivacyPage() {
               <p className="mb-3">We do not sell your personal data. We share information only in these circumstances:</p>
               <ul className="list-disc list-inside space-y-2 text-gray-400">
                 <li>With your organization&apos;s administrators, as part of their workspace.</li>
-                <li>With service providers (LiveKit, Daily.co, AWS) necessary to deliver the service.</li>
+                <li>With service providers (LiveKit, AWS) necessary to deliver the service.</li>
                 <li>When required by law, subpoena, or valid legal process.</li>
                 <li>With your explicit consent.</li>
               </ul>

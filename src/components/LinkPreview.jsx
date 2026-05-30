@@ -4,6 +4,7 @@ export default function LinkPreview({ attachment }) {
   const meta = attachment.metadata ? (typeof attachment.metadata === 'string' ? JSON.parse(attachment.metadata) : attachment.metadata) : {};
 
   if (attachment.type === 'gdrive') {
+    const isPresentation = attachment.mime_type?.includes('presentation') || /\.pptx?$/i.test(attachment.title || '');
     return (
       <a href={attachment.url} target="_blank" rel="noopener noreferrer"
         className="flex items-center gap-3 mt-2 p-3 bg-gray-800/50 border border-gray-700/50 rounded-xl hover:border-gray-600 transition max-w-sm">
@@ -15,7 +16,22 @@ export default function LinkPreview({ attachment }) {
         </span>
         <div className="min-w-0">
           <p className="text-sm font-medium text-blue-400 truncate">{attachment.title}</p>
-          <p className="text-xs text-gray-500">Google Drive</p>
+          <p className="text-xs text-gray-500">
+            Google Drive{isPresentation ? ' · Presentation' : ''}
+          </p>
+        </div>
+      </a>
+    );
+  }
+
+  if (attachment.type === 'presentation') {
+    return (
+      <a href={attachment.url} target="_blank" rel="noopener noreferrer"
+        className="flex items-center gap-3 mt-2 p-3 bg-gray-800/50 border border-[#fdcb6e]/20 rounded-xl hover:border-[#fdcb6e]/40 transition max-w-sm">
+        <span className="text-2xl flex-shrink-0">📽️</span>
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-[#fdcb6e] truncate">{attachment.title || 'Presentation'}</p>
+          <p className="text-xs text-gray-500">Presentation Link</p>
         </div>
       </a>
     );

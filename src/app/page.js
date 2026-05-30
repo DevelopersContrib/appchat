@@ -2,8 +2,8 @@ import Link from 'next/link';
 
 export const metadata = {
   title: 'AppChat — White-Label Meeting Platform with AI Agents',
-  description: 'Secure chat, HD video calls, and AI agents for your organization. Deploy your branded meeting platform in minutes. Multi-tenant, white-label, CRM-integrated.',
-  keywords: ['chat platform', 'video conferencing', 'AI meeting agent', 'white-label', 'multi-tenant', 'team communication', 'LiveKit', 'Daily.co'],
+  description: 'Secure chat, HD video calls, and AI agents for VentureOS and VNOC teams.',
+  keywords: ['chat platform', 'video conferencing', 'AI meeting agent', 'white-label', 'multi-tenant', 'team communication', 'LiveKit'],
   openGraph: {
     title: 'AppChat — Your Meetings. Your AI Agent. Your Platform.',
     description: 'White-label chat, video, and voice with an AI agent that takes notes, answers questions, and follows up. Deploy under your brand in minutes.',
@@ -31,7 +31,6 @@ function Nav() {
           <a href="#how-it-works" className="hover:text-white transition">How It Works</a>
           <a href="#use-cases" className="hover:text-white transition">Use Cases</a>
           <a href="#ecosystem" className="hover:text-white transition">Ecosystem</a>
-          <a href="#pricing" className="hover:text-white transition">Pricing</a>
         </nav>
         <div className="flex items-center gap-3">
           <Link href="/login" className="text-sm text-gray-400 hover:text-white transition">
@@ -41,7 +40,7 @@ function Nav() {
             href="/login"
             className="px-5 py-2 bg-[#d63031] hover:bg-[#c0392b] text-white rounded-lg text-sm font-medium transition"
           >
-            Get Started Free
+            Open Dashboard
           </Link>
         </div>
       </div>
@@ -69,8 +68,7 @@ function Hero() {
         </h1>
 
         <p className="text-lg md:text-xl text-gray-400 max-w-2xl mx-auto mb-10 leading-relaxed">
-          White-label chat, video, and voice — with an AI agent that takes notes,
-          answers questions, and follows up. Deploy under your brand in minutes.
+          Secure chat, video, and voice with an AI assistant built for VentureOS and VNOC teams.
         </p>
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
@@ -78,7 +76,7 @@ function Hero() {
             href="/login"
             className="w-full sm:w-auto px-8 py-3.5 bg-[#d63031] hover:bg-[#c0392b] text-white rounded-xl font-medium transition text-center shadow-lg shadow-[#d63031]/20"
           >
-            Start Free Trial
+            Go to Dashboard
           </Link>
           <a
             href="#how-it-works"
@@ -292,9 +290,7 @@ function UseCases() {
 function Ecosystem() {
   const platforms = [
     { name: 'VNOC', domain: 'vnoc.com', desc: 'The operating system for digital ventures. Manage domains, deploy landers, and orchestrate your entire portfolio from one dashboard.', tag: 'Operations Hub' },
-    { name: 'GrowAgent', domain: 'growagent.com', desc: 'AI-powered CRM and outreach platform. Automate prospecting, track engagement pipelines, and close deals with intelligent follow-ups.', tag: 'CRM & Outreach' },
     { name: 'VentureOS', domain: 'ventureos.com', desc: 'The autonomous enterprise engine. 6,000+ companies, 21,000 domains, and a million monthly visitors — managed by AI agents.', tag: 'Enterprise Platform' },
-    { name: 'AgentDAO', domain: 'agentdao.com', desc: 'Decentralized agent marketplace. Deploy, share, and monetize AI agents across the VentureOS network.', tag: 'Agent Network' },
   ];
 
   return (
@@ -302,10 +298,9 @@ function Ecosystem() {
       <div className="max-w-6xl mx-auto">
         <div className="text-center mb-16">
           <p className="text-[#fdcb6e] text-sm font-medium uppercase tracking-wider mb-3">Ecosystem</p>
-          <h2 className="text-3xl md:text-4xl font-bold mb-4">Powered by the VentureOS stack</h2>
+          <h2 className="text-3xl md:text-4xl font-bold mb-4">Built for VentureOS and VNOC</h2>
           <p className="text-gray-400 max-w-2xl mx-auto">
-            AppChat is one piece of a fully integrated autonomous enterprise platform.
-            Every tool connects. Every agent collaborates.
+            AppChat currently serves VentureOS and VNOC organizations.
           </p>
         </div>
 
@@ -341,88 +336,9 @@ function Ecosystem() {
 
         <div className="mt-8 text-center">
           <p className="text-sm text-gray-500">
-            AppChat connects natively with every platform in the stack &mdash;
-            <span className="text-gray-400"> CRM data from GrowAgent, domain assets from VNOC, agent capabilities from AgentDAO.</span>
+            AppChat is aligned to the VentureOS ecosystem &mdash;
+            <span className="text-gray-400"> with operations and domain infrastructure from VNOC.</span>
           </p>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function Pricing() {
-  const plans = [
-    {
-      name: 'Starter', price: 'Free', period: '', desc: 'For small teams getting started.',
-      features: ['Up to 5 team members', '3 channels', '100 messages/day', 'Daily.co video rooms', 'Community support'],
-      cta: 'Start Free', highlight: false,
-    },
-    {
-      name: 'Professional', price: '$29', period: '/seat/mo', desc: 'For growing teams that need AI.',
-      features: ['Unlimited team members', 'Unlimited channels', 'Unlimited messages', 'LiveKit HD video + AI agent', 'CRM integration', 'Custom branding', 'Priority support'],
-      cta: 'Start Trial', highlight: true,
-    },
-    {
-      name: 'Enterprise', price: 'Custom', period: '', desc: 'For organizations at scale.',
-      features: ['Everything in Professional', 'Custom domain (chat.yourco.com)', 'SSO / SAML', 'Dedicated infrastructure', 'SLA guarantee', 'White-label resale rights', 'Onboarding concierge'],
-      cta: 'Contact Sales', highlight: false,
-    },
-  ];
-
-  return (
-    <section id="pricing" className="py-24 px-6">
-      <div className="max-w-5xl mx-auto">
-        <div className="text-center mb-16">
-          <p className="text-[#d63031] text-sm font-medium uppercase tracking-wider mb-3">Pricing</p>
-          <h2 className="text-3xl md:text-4xl font-bold mb-4">Simple, transparent pricing</h2>
-          <p className="text-gray-400">Start free. Upgrade when you need AI and custom branding. Billing via <a href="https://paydirect.com" target="_blank" rel="noopener noreferrer" className="text-[#fdcb6e] hover:text-[#ffeaa7]">PayDirect</a>.</p>
-        </div>
-
-        <div className="grid md:grid-cols-3 gap-6">
-          {plans.map((p) => (
-            <div
-              key={p.name}
-              className={`p-6 rounded-2xl border flex flex-col ${
-                p.highlight
-                  ? 'bg-gradient-to-b from-[#d63031]/10 to-gray-950 border-[#d63031]/30 ring-1 ring-[#d63031]/20'
-                  : 'bg-gray-950 border-gray-800/50'
-              }`}
-            >
-              {p.highlight && (
-                <span className="inline-block px-3 py-1 bg-[#d63031] text-white text-xs font-medium rounded-full w-fit mb-3">
-                  Most Popular
-                </span>
-              )}
-              <h3 className="font-semibold text-lg">{p.name}</h3>
-              <div className="mt-3 mb-1">
-                <span className="text-4xl font-bold">{p.price}</span>
-                {p.period && <span className="text-gray-500 text-sm">{p.period}</span>}
-              </div>
-              <p className="text-sm text-gray-500 mb-6">{p.desc}</p>
-
-              <ul className="space-y-2.5 mb-8 flex-1">
-                {p.features.map((f) => (
-                  <li key={f} className="flex items-start gap-2 text-sm text-gray-300">
-                    <svg className="w-4 h-4 text-[#00b894] mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    {f}
-                  </li>
-                ))}
-              </ul>
-
-              <Link
-                href="/login"
-                className={`w-full py-3 rounded-xl text-sm font-medium text-center transition ${
-                  p.highlight
-                    ? 'bg-[#d63031] hover:bg-[#c0392b] text-white'
-                    : 'border border-gray-700 hover:border-gray-500'
-                }`}
-              >
-                {p.cta}
-              </Link>
-            </div>
-          ))}
         </div>
       </div>
     </section>
@@ -473,16 +389,16 @@ function CTA() {
     <section className="py-24 px-6 bg-gradient-to-br from-[#d63031] to-[#c0392b]">
       <div className="max-w-3xl mx-auto text-center">
         <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
-          Ready to upgrade your meetings?
+          Ready to enter the workspace?
         </h2>
         <p className="text-white/70 mb-8 max-w-xl mx-auto">
-          Deploy your branded meeting platform in under 5 minutes. No credit card required.
+          Sign in to continue to your AppChat dashboard.
         </p>
         <Link
           href="/login"
           className="inline-block px-10 py-4 bg-white text-[#d63031] hover:bg-gray-100 rounded-xl font-medium transition text-lg shadow-xl"
         >
-          Get Started Free
+          Open Dashboard
         </Link>
       </div>
     </section>
@@ -505,7 +421,6 @@ function Footer() {
             <h4 className="text-sm font-semibold mb-4">Product</h4>
             <ul className="space-y-2 text-sm text-gray-500">
               <li><a href="#features" className="hover:text-white transition">Features</a></li>
-              <li><a href="#pricing" className="hover:text-white transition">Pricing</a></li>
               <li><a href="#use-cases" className="hover:text-white transition">Use Cases</a></li>
               <li><a href="#how-it-works" className="hover:text-white transition">How It Works</a></li>
             </ul>
@@ -517,7 +432,6 @@ function Footer() {
               <li><Link href="/about" className="hover:text-white transition">About</Link></li>
               <li><Link href="/contact" className="hover:text-white transition">Contact</Link></li>
               <li><a href="https://ventureos.com" target="_blank" rel="noopener noreferrer" className="hover:text-white transition">VentureOS</a></li>
-              <li><a href="https://paydirect.com" target="_blank" rel="noopener noreferrer" className="hover:text-white transition">PayDirect Billing</a></li>
             </ul>
           </div>
 
@@ -525,8 +439,7 @@ function Footer() {
             <h4 className="text-sm font-semibold mb-4">Ecosystem</h4>
             <ul className="space-y-2 text-sm text-gray-500">
               <li><a href="https://vnoc.com" target="_blank" rel="noopener noreferrer" className="hover:text-white transition">VNOC</a></li>
-              <li><a href="https://growagent.com" target="_blank" rel="noopener noreferrer" className="hover:text-white transition">GrowAgent</a></li>
-              <li><a href="https://agentdao.com" target="_blank" rel="noopener noreferrer" className="hover:text-white transition">AgentDAO</a></li>
+              <li><a href="https://ventureos.com" target="_blank" rel="noopener noreferrer" className="hover:text-white transition">VentureOS</a></li>
             </ul>
           </div>
 
@@ -559,7 +472,6 @@ export default function LandingPage() {
       <HowItWorks />
       <UseCases />
       <Ecosystem />
-      <Pricing />
       <PublicRooms />
       <CTA />
       <Footer />

@@ -30,10 +30,6 @@ export async function GET() {
         description: 'AI participant that joins rooms, takes notes, answers brand-specific questions, and posts summaries to CRM.',
         features: ['note_taking', 'question_answering', 'call_summary', 'crm_integration', 'brand_knowledge'],
       },
-      daily_rooms: {
-        description: 'Embedded video chat rooms via Daily.co with screen sharing.',
-        provider: 'Daily.co',
-      },
     },
 
     integrations: {
@@ -67,7 +63,6 @@ export async function GET() {
         channels: '/api/channels',
         messages: '/api/channels/{id}/messages',
         livekit_token: '/api/livekit/token',
-        daily_room: '/api/daily/room',
         gdrive_files: '/api/gdrive/files',
         unfurl: '/api/unfurl',
       },
@@ -75,10 +70,7 @@ export async function GET() {
 
     ecosystem: [
       { name: 'VNOC', url: 'https://vnoc.com', role: 'Operations Hub' },
-      { name: 'GrowAgent', url: 'https://growagent.com', role: 'CRM & Outreach' },
       { name: 'VentureOS', url: 'https://ventureos.com', role: 'Enterprise Platform' },
-      { name: 'AgentDAO', url: 'https://agentdao.com', role: 'Agent Network' },
-      { name: 'PayDirect', url: 'https://paydirect.com', role: 'Billing' },
     ],
   };
 

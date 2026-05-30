@@ -1,21 +1,28 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { Magic } from 'magic-sdk';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
-  const [sent, setSent] = useState(false);
+  const [sdkReady, setSdkReady] = useState(false);
   const [error, setError] = useState('');
   const magicRef = useRef(null);
 
   useEffect(() => {
-    const script = document.createElement('script');
-    script.src = 'https://auth.magic.link/sdk';
-    script.onload = () => {
-      magicRef.current = new window.Magic(process.env.NEXT_PUBLIC_MAGIC_PUBLISHABLE_KEY);
-    };
-    document.head.appendChild(script);
+    const publishableKey = process.env.NEXT_PUBLIC_MAGIC_PUBLISHABLE_KEY;
+    if (!publishableKey) {
+      setError('Magic is not configured. Missing NEXT_PUBLIC_MAGIC_PUBLISHABLE_KEY.');
+      return;
+    }
+
+    try {
+      magicRef.current = new Magic(publishableKey);
+      setSdkReady(true);
+    } catch {
+      setError('Failed to initialize Magic SDK.');
+    }
   }, []);
 
   async function handleLogin(e) {
@@ -24,7 +31,7 @@ export default function LoginPage() {
     setError('');
 
     try {
-      if (!magicRef.current) throw new Error('Auth loading, please try again');
+      if (!magicRef.current) throw new Error('Auth is still loading. Please try again in a moment.');
       const didToken = await magicRef.current.auth.loginWithMagicLink({ email });
 
       const res = await fetch('/api/auth/callback', {
@@ -33,7 +40,10 @@ export default function LoginPage() {
         body: JSON.stringify({ didToken }),
       });
 
-      if (!res.ok) throw new Error('Authentication failed');
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Authentication failed');
+      }
 
       const { redirectTo } = await res.json();
       window.location.href = redirectTo || '/';
@@ -52,33 +62,24 @@ export default function LoginPage() {
           <p className="text-gray-400 mt-2 text-sm">Sign in with your email</p>
         </div>
 
-        {sent ? (
-          <div className="bg-gray-900 border border-[#00b894]/30 rounded-xl p-6 text-center">
-            <p className="text-[#00b894] font-medium">Check your email</p>
-            <p className="text-gray-400 text-sm mt-2">
-              We sent a magic link to <strong>{email}</strong>
-            </p>
-          </div>
-        ) : (
-          <form onSubmit={handleLogin} className="space-y-4">
-            <input
-              type="email"
-              required
-              placeholder="you@company.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg focus:outline-none focus:border-[#d63031] text-sm"
-            />
-            {error && <p className="text-[#d63031] text-sm">{error}</p>}
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-3 bg-[#d63031] hover:bg-[#c0392b] text-white disabled:opacity-50 rounded-lg font-medium text-sm transition"
-            >
-              {loading ? 'Sending link...' : 'Continue with Email'}
-            </button>
-          </form>
-        )}
+        <form onSubmit={handleLogin} className="space-y-4">
+          <input
+            type="email"
+            required
+            placeholder="you@company.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg focus:outline-none focus:border-[#d63031] text-sm"
+          />
+          {error && <p className="text-[#d63031] text-sm">{error}</p>}
+          <button
+            type="submit"
+            disabled={loading || !sdkReady}
+            className="w-full py-3 bg-[#d63031] hover:bg-[#c0392b] text-white disabled:opacity-50 rounded-lg font-medium text-sm transition"
+          >
+            {loading ? 'Sending link...' : (!sdkReady ? 'Loading auth...' : 'Continue with Email')}
+          </button>
+        </form>
       </div>
     </div>
   );

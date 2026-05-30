@@ -1,13 +1,24 @@
 import './globals.css';
+import '@livekit/components-styles';
 
 export const metadata = {
   metadataBase: new URL('https://appchat.com'),
   title: { default: 'AppChat — White-Label Meeting Platform with AI Agents', template: '%s — AppChat' },
-  description: 'Secure chat, HD video calls, and AI agents for your organization. Deploy your branded meeting platform in minutes. Multi-tenant, white-label, CRM-integrated.',
+  description: 'Secure chat, HD video calls, and AI agents for VentureOS and VNOC teams.',
   keywords: ['chat platform', 'video conferencing', 'AI meeting agent', 'white-label', 'multi-tenant', 'team communication'],
   authors: [{ name: 'AppChat', url: 'https://appchat.com' }],
   creator: 'VentureOS',
   publisher: 'AppChat',
+  applicationName: 'AppChat',
+  manifest: '/manifest.webmanifest',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'AppChat',
+  },
+  formatDetection: {
+    telephone: false,
+  },
   openGraph: {
     title: 'AppChat — Your Meetings. Your AI Agent. Your Platform.',
     description: 'White-label chat, video, and voice with an AI agent that takes notes, answers questions, and follows up.',
@@ -26,6 +37,10 @@ export const metadata = {
   robots: { index: true, follow: true, googleBot: { index: true, follow: true } },
   verification: {},
   category: 'technology',
+};
+
+export const viewport = {
+  themeColor: '#0a0a0f',
 };
 
 export default function RootLayout({ children }) {

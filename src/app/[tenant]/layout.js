@@ -37,10 +37,8 @@ export default async function TenantLayout({ children, params }) {
 
     return (
       <>
-        <head>
-          <link href={`https://brandidentity.com/font/${tenantDomain}`} rel="stylesheet" />
-          <link href={`https://www.brandidentity.com/api/v1/brands/${tenantDomain}/css?format=typography`} rel="stylesheet" />
-        </head>
+        <link href={`https://brandidentity.com/font/${tenantDomain}`} rel="stylesheet" />
+        <link href={`https://www.brandidentity.com/api/v1/brands/${tenantDomain}/css?format=typography`} rel="stylesheet" />
         <div className="h-screen flex">
           <Sidebar
             tenant={{ ...tenant, logo_url: `https://www.brandidentity.com/logo/${tenantDomain}` }}

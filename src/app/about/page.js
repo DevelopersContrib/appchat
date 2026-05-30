@@ -65,7 +65,7 @@ export default function AboutPage() {
             <h2 className="text-2xl font-bold text-white mt-12 mb-4">The Technology</h2>
             <p>
               AppChat is built on enterprise-grade infrastructure: LiveKit for ultra-low-latency
-              video and voice, Daily.co for embedded collaboration rooms, and AI agents powered
+              video and voice, and AI agents powered
               by large language models that understand your business context in real-time.
             </p>
             <p>

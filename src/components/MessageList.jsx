@@ -30,6 +30,16 @@ function Avatar({ name, url }) {
   );
 }
 
+function parseMetadata(metadata) {
+  if (!metadata) return {};
+  if (typeof metadata === 'object') return metadata;
+  try {
+    return JSON.parse(metadata);
+  } catch {
+    return {};
+  }
+}
+
 export default function MessageList({ messages, currentUser }) {
   const endRef = useRef(null);
 
@@ -42,6 +52,7 @@ export default function MessageList({ messages, currentUser }) {
   return (
     <div className="flex-1 overflow-y-auto px-5 py-4 space-y-0.5">
       {messages.map((msg, i) => {
+        const renderKey = `${String(msg.id ?? 'msg')}-${msg.created_at ?? 'time'}-${i}`;
         const msgDate = formatDate(msg.created_at);
         const showDate = msgDate !== lastDate;
         lastDate = msgDate;
@@ -51,19 +62,54 @@ export default function MessageList({ messages, currentUser }) {
         const timeDiff = prevMsg
           ? new Date(msg.created_at) - new Date(prevMsg.created_at)
           : Infinity;
-        const compact = sameAuthor && timeDiff < 300000;
+        const isCurrentUser = msg.user_id === currentUser?.id;
+        const resolvedName = isCurrentUser
+          ? (currentUser?.name || msg.author_name || currentUser?.email || msg.author_email)
+          : (msg.author_name || msg.author_email);
+        const resolvedAvatar = isCurrentUser
+          ? (currentUser?.avatar_url || msg.author_avatar)
+          : msg.author_avatar;
+        // Keep sender identity visible for your own new messages.
+        const compact = !isCurrentUser && sameAuthor && timeDiff < 300000;
 
         if (msg.type === 'system') {
           return (
-            <div key={msg.id}>
+            <div key={renderKey}>
               {showDate && <DateDivider date={msgDate} />}
               <div className="text-xs text-gray-500 text-center py-2">{msg.body}</div>
             </div>
           );
         }
 
+        if (msg.type === 'ai') {
+          const meta = parseMetadata(msg.metadata);
+          const brandDomain = meta.brandDomain;
+          const brandLogo = meta.brandLogo;
+          const faviconUrl = brandDomain ? `https://www.brandidentity.com/favicon/${brandDomain}` : null;
+          const avatarSrc = brandLogo || faviconUrl;
+          return (
+            <div key={renderKey}>
+              {showDate && <DateDivider date={msgDate} />}
+              <div className="rounded-xl border border-[#fdcb6e]/20 bg-gradient-to-r from-[#fdcb6e]/10 to-transparent px-3 py-2.5 my-2">
+                <div className="flex items-center gap-2 mb-1">
+                  {avatarSrc ? (
+                    <img src={avatarSrc} alt="Brand" className="w-6 h-6 rounded-full bg-gray-900 border border-[#fdcb6e]/20 object-contain p-0.5" />
+                  ) : (
+                    <div className="w-6 h-6 rounded-full bg-[#fdcb6e] text-gray-950 text-[10px] font-bold flex items-center justify-center">
+                      AI
+                    </div>
+                  )}
+                  <span className="text-xs font-semibold text-[#fdcb6e]">Brand Agent</span>
+                  <span className="text-[10px] text-gray-500">{formatTime(msg.created_at)}</span>
+                </div>
+                <p className="text-sm text-gray-200 break-words whitespace-pre-wrap">{msg.body}</p>
+              </div>
+            </div>
+          );
+        }
+
         return (
-          <div key={msg.id}>
+          <div key={renderKey}>
             {showDate && <DateDivider date={msgDate} />}
             <div className={`group flex gap-3 hover:bg-gray-800/50 rounded px-2 ${compact ? 'py-0.5' : 'py-2 mt-2'}`}>
               {compact ? (
@@ -73,20 +119,23 @@ export default function MessageList({ messages, currentUser }) {
                   </span>
                 </div>
               ) : (
-                <Avatar name={msg.author_name || msg.author_email} url={msg.author_avatar} />
+                <Avatar name={resolvedName} url={resolvedAvatar} />
               )}
               <div className="min-w-0 flex-1">
                 {!compact && (
                   <div className="flex items-baseline gap-2">
                     <span className="font-semibold text-sm">
-                      {msg.author_name || msg.author_email || 'Unknown'}
+                      {resolvedName || 'Unknown'}
                     </span>
                     <span className="text-xs text-gray-500">{formatTime(msg.created_at)}</span>
                   </div>
                 )}
                 <p className="text-sm text-gray-300 break-words whitespace-pre-wrap">{msg.body}</p>
-                {msg.attachments?.map((att) => (
-                  <LinkPreview key={att.id} attachment={att} />
+                {msg.attachments?.map((att, attIndex) => (
+                  <LinkPreview
+                    key={`${String(att.id ?? 'att')}-${att.url ?? ''}-${attIndex}`}
+                    attachment={att}
+                  />
                 ))}
               </div>
             </div>

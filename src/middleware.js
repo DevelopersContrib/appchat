@@ -26,7 +26,7 @@ export async function middleware(request) {
   }
 
   const segments = pathname.split('/').filter(Boolean);
-  const isDomainPage = segments.length === 1 && !['admin', 'onboard', 'select-org'].includes(segments[0]);
+  const isDomainPage = segments.length === 1 && !['admin', 'onboard', 'select-org', 'dashboard'].includes(segments[0]);
   if (isDomainPage) {
     return NextResponse.next();
   }
