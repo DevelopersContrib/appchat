@@ -48,9 +48,7 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold">
-            <span className="text-blue-500">App</span>Chat
-          </h1>
+          <img src="https://www.brandidentity.com/logo/appchat.com" alt="AppChat" className="h-10 mx-auto" />
           <p className="text-gray-400 mt-2 text-sm">Sign in with your email</p>
         </div>
 

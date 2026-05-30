@@ -39,6 +39,7 @@ export default function OnboardPage() {
   return (
     <div className="min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
+        <img src="https://www.brandidentity.com/logo/appchat.com" alt="AppChat" className="h-10 mx-auto mb-4" />
         <h1 className="text-2xl font-bold text-center mb-2">Create your organization</h1>
         <p className="text-gray-400 text-sm text-center mb-8">
           Set up your team workspace on AppChat.
