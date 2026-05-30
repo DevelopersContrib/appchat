@@ -9,6 +9,7 @@ function Nav() {
           <a href="#features" className="hover:text-white transition">Features</a>
           <a href="#how-it-works" className="hover:text-white transition">How It Works</a>
           <a href="#use-cases" className="hover:text-white transition">Use Cases</a>
+          <a href="#ecosystem" className="hover:text-white transition">Ecosystem</a>
           <a href="#pricing" className="hover:text-white transition">Pricing</a>
         </nav>
         <div className="flex items-center gap-3">
@@ -352,6 +353,87 @@ function UseCases() {
   );
 }
 
+function Ecosystem() {
+  const platforms = [
+    {
+      name: 'VNOC',
+      domain: 'vnoc.com',
+      desc: 'The operating system for digital ventures. Manage domains, deploy landers, and orchestrate your entire portfolio from one dashboard.',
+      tag: 'Operations Hub',
+    },
+    {
+      name: 'GrowAgent',
+      domain: 'growagent.com',
+      desc: 'AI-powered CRM and outreach platform. Automate prospecting, track engagement pipelines, and close deals with intelligent follow-ups.',
+      tag: 'CRM & Outreach',
+    },
+    {
+      name: 'VentureOS',
+      domain: 'ventureos.com',
+      desc: 'The autonomous enterprise engine. 6,000+ companies, 21,000 domains, and a million monthly visitors — managed by AI agents.',
+      tag: 'Enterprise Platform',
+    },
+    {
+      name: 'AgentDAO',
+      domain: 'agentdao.com',
+      desc: 'Decentralized agent marketplace. Deploy, share, and monetize AI agents across the VentureOS network.',
+      tag: 'Agent Network',
+    },
+  ];
+
+  return (
+    <section id="ecosystem" className="py-24 px-6 bg-gray-900/30">
+      <div className="max-w-6xl mx-auto">
+        <div className="text-center mb-16">
+          <p className="text-blue-400 text-sm font-medium uppercase tracking-wider mb-3">Ecosystem</p>
+          <h2 className="text-3xl md:text-4xl font-bold mb-4">Powered by the VentureOS stack</h2>
+          <p className="text-gray-400 max-w-2xl mx-auto">
+            AppChat is one piece of a fully integrated autonomous enterprise platform.
+            Every tool connects. Every agent collaborates.
+          </p>
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-6">
+          {platforms.map((p) => (
+            <a
+              key={p.domain}
+              href={`https://${p.domain}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group flex gap-5 p-6 rounded-2xl bg-gray-950/50 border border-gray-800/50 hover:border-blue-500/30 transition-all duration-300"
+            >
+              <div className="flex-shrink-0">
+                <img
+                  src={`https://www.brandidentity.com/logo/${p.domain}`}
+                  alt={p.name}
+                  className="w-14 h-14 rounded-xl object-contain bg-gray-900 p-2 border border-gray-800 group-hover:border-blue-500/30 transition"
+                />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <h3 className="font-semibold">{p.name}</h3>
+                  <span className="px-2 py-0.5 bg-blue-600/10 text-blue-400 text-[10px] font-medium rounded-full">
+                    {p.tag}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-500 mb-2">{p.domain}</p>
+                <p className="text-sm text-gray-400 leading-relaxed">{p.desc}</p>
+              </div>
+            </a>
+          ))}
+        </div>
+
+        <div className="mt-8 text-center">
+          <p className="text-sm text-gray-500">
+            AppChat connects natively with every platform in the stack &mdash;
+            <span className="text-gray-400"> CRM data from GrowAgent, domain assets from VNOC, agent capabilities from AgentDAO.</span>
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function Pricing() {
   const plans = [
     {
@@ -389,7 +471,7 @@ function Pricing() {
         <div className="text-center mb-16">
           <p className="text-blue-400 text-sm font-medium uppercase tracking-wider mb-3">Pricing</p>
           <h2 className="text-3xl md:text-4xl font-bold mb-4">Simple, transparent pricing</h2>
-          <p className="text-gray-400">Start free. Upgrade when you need AI and custom branding.</p>
+          <p className="text-gray-400">Start free. Upgrade when you need AI and custom branding. Billing via <a href="https://paydirect.com" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300">PayDirect</a>.</p>
         </div>
 
         <div className="grid md:grid-cols-3 gap-6">
@@ -507,7 +589,7 @@ function Footer() {
   return (
     <footer className="border-t border-gray-800/50 py-16 px-6">
       <div className="max-w-6xl mx-auto">
-        <div className="grid md:grid-cols-4 gap-10 mb-12">
+        <div className="grid md:grid-cols-5 gap-8 mb-12">
           <div>
             <img src="https://www.brandidentity.com/logo/appchat.com" alt="AppChat" className="h-7 mb-4" />
             <p className="text-sm text-gray-500 leading-relaxed">
@@ -530,7 +612,17 @@ function Footer() {
             <ul className="space-y-2 text-sm text-gray-500">
               <li><Link href="/about" className="hover:text-white transition">About</Link></li>
               <li><Link href="/contact" className="hover:text-white transition">Contact</Link></li>
-              <li><a href="https://vnoc.com" target="_blank" rel="noopener noreferrer" className="hover:text-white transition">VentureOS</a></li>
+              <li><a href="https://ventureos.com" target="_blank" rel="noopener noreferrer" className="hover:text-white transition">VentureOS</a></li>
+              <li><a href="https://paydirect.com" target="_blank" rel="noopener noreferrer" className="hover:text-white transition">PayDirect Billing</a></li>
+            </ul>
+          </div>
+
+          <div>
+            <h4 className="text-sm font-semibold mb-4">Ecosystem</h4>
+            <ul className="space-y-2 text-sm text-gray-500">
+              <li><a href="https://vnoc.com" target="_blank" rel="noopener noreferrer" className="hover:text-white transition">VNOC</a></li>
+              <li><a href="https://growagent.com" target="_blank" rel="noopener noreferrer" className="hover:text-white transition">GrowAgent</a></li>
+              <li><a href="https://agentdao.com" target="_blank" rel="noopener noreferrer" className="hover:text-white transition">AgentDAO</a></li>
             </ul>
           </div>
 
@@ -562,6 +654,7 @@ export default function LandingPage() {
       <Features />
       <HowItWorks />
       <UseCases />
+      <Ecosystem />
       <Pricing />
       <PublicRooms />
       <CTA />
