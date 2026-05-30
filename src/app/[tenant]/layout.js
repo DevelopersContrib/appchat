@@ -33,19 +33,27 @@ export default async function TenantLayout({ children, params }) {
       [tenant.id, user.id]
     );
 
+    const tenantDomain = tenant.domain || `${slug}.com`;
+
     return (
-      <div className="h-screen flex">
-        <Sidebar
-          tenant={tenant}
-          channels={channels}
-          user={user}
-          role={membership.role}
-          currentSlug={slug}
-        />
-        <main className="flex-1 flex flex-col min-w-0">
-          {children}
-        </main>
-      </div>
+      <>
+        <head>
+          <link href={`https://brandidentity.com/font/${tenantDomain}`} rel="stylesheet" />
+          <link href={`https://www.brandidentity.com/api/v1/brands/${tenantDomain}/css?format=typography`} rel="stylesheet" />
+        </head>
+        <div className="h-screen flex">
+          <Sidebar
+            tenant={{ ...tenant, logo_url: `https://www.brandidentity.com/logo/${tenantDomain}` }}
+            channels={channels}
+            user={user}
+            role={membership.role}
+            currentSlug={slug}
+          />
+          <main className="flex-1 flex flex-col min-w-0">
+            {children}
+          </main>
+        </div>
+      </>
     );
   }
 

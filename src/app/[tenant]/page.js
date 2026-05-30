@@ -10,6 +10,7 @@ export default async function TenantPage({ params }) {
     return (
       <div className="flex-1 flex items-center justify-center text-gray-500">
         <div className="text-center">
+          <img src={`https://www.brandidentity.com/logo/${tenant.slug}.com`} alt={tenant.name} className="h-12 mx-auto mb-4" />
           <h2 className="text-xl font-semibold text-gray-300 mb-2">
             Welcome to {tenant.name}
           </h2>
@@ -22,15 +23,21 @@ export default async function TenantPage({ params }) {
   const domain = await findVnocDomain(slug);
   if (!domain) return null;
 
-  const logoUrl = domain.logo || `https://www.brandidentity.com/logo/${domain.domain_name}`;
+  const domainName = domain.domain_name;
+  const logoUrl = `https://www.brandidentity.com/logo/${domainName}`;
 
   return (
     <>
+      <head>
+        <link href={`https://brandidentity.com/font/${domainName}`} rel="stylesheet" />
+        <link href={`https://www.brandidentity.com/api/v1/brands/${domainName}/css?format=typography`} rel="stylesheet" />
+      </head>
+
       <header className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
         <div className="flex items-center gap-3">
-          <img src={logoUrl} alt={domain.domain_name} className="h-8 rounded" />
+          <img src={logoUrl} alt={domainName} className="h-8 rounded" />
           <div>
-            <h1 className="font-semibold">{domain.domain_name}</h1>
+            <h1 className="font-semibold">{domainName}</h1>
             {domain.category_name && (
               <span className="text-xs text-gray-500">{domain.category_name}</span>
             )}
@@ -45,8 +52,8 @@ export default async function TenantPage({ params }) {
 
       <main className="flex-1 flex items-center justify-center px-6">
         <div className="max-w-lg text-center">
-          <img src={logoUrl} alt={domain.domain_name} className="h-20 mx-auto mb-6 rounded-xl" />
-          <h2 className="text-3xl font-bold mb-3">{domain.title || domain.domain_name}</h2>
+          <img src={logoUrl} alt={domainName} className="h-20 mx-auto mb-6 rounded-xl" />
+          <h2 className="text-3xl font-bold mb-3">{domain.title || domainName}</h2>
           {domain.description && (
             <p className="text-gray-400 text-sm mb-6 leading-relaxed line-clamp-3">{domain.description}</p>
           )}

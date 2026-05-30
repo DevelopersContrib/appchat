@@ -22,6 +22,10 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
+      <head>
+        <link href="https://brandidentity.com/font/appchat.com" rel="stylesheet" />
+        <link href="https://www.brandidentity.com/api/v1/brands/appchat.com/css?format=typography" rel="stylesheet" />
+      </head>
       <body className="bg-gray-950 text-gray-100 antialiased">
         {children}
       </body>
