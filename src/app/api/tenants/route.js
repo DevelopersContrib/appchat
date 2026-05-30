@@ -1,18 +1,19 @@
 import { NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth.js';
-import { insert, queryOne } from '@/lib/db.js';
+import { insert, queryOne, query } from '@/lib/db.js';
 
 export async function POST(request) {
   try {
     const user = await requireSession();
-    const { name, slug } = await request.json();
+    const body = await request.json();
+    const { name, slug, logoUrl, brandColor, crmWebhook, channels, inviteEmails } = body;
 
     if (!name?.trim() || !slug?.trim()) {
       return NextResponse.json({ error: 'Name and slug required' }, { status: 400 });
     }
 
-    if (!/^[a-z0-9][a-z0-9-]*[a-z0-9]$/.test(slug) && slug.length < 2) {
-      return NextResponse.json({ error: 'Invalid slug format' }, { status: 400 });
+    if (!/^[a-z0-9][a-z0-9-]*$/.test(slug)) {
+      return NextResponse.json({ error: 'Slug must be lowercase letters, numbers, and hyphens' }, { status: 400 });
     }
 
     const existing = await queryOne('SELECT id FROM tenants WHERE slug = ?', [slug]);
@@ -21,8 +22,14 @@ export async function POST(request) {
     }
 
     const tenantId = await insert(
-      'INSERT INTO tenants (slug, name, logo_url) VALUES (?, ?, ?)',
-      [slug, name.trim(), `https://brandidentity.com/logo/${slug}.com`]
+      'INSERT INTO tenants (slug, name, logo_url, brand_color, crm_webhook_url) VALUES (?, ?, ?, ?, ?)',
+      [
+        slug,
+        name.trim(),
+        logoUrl || `https://www.brandidentity.com/logo/${slug}.com`,
+        brandColor || '#2563eb',
+        crmWebhook || null,
+      ]
     );
 
     await insert(
@@ -30,20 +37,62 @@ export async function POST(request) {
       [tenantId, user.id, 'owner']
     );
 
-    const generalId = await insert(
-      'INSERT INTO channels (tenant_id, name, description, created_by) VALUES (?, ?, ?, ?)',
-      [tenantId, 'general', 'General discussion', user.id]
-    );
+    const channelList = channels?.length ? channels : ['general'];
+    for (const ch of channelList) {
+      const channelId = await insert(
+        'INSERT INTO channels (tenant_id, name, description, created_by) VALUES (?, ?, ?, ?)',
+        [tenantId, ch, ch === 'general' ? 'General discussion' : '', user.id]
+      );
 
-    await insert(
-      'INSERT INTO channel_members (channel_id, user_id) VALUES (?, ?)',
-      [generalId, user.id]
-    );
+      await insert(
+        'INSERT INTO channel_members (channel_id, user_id) VALUES (?, ?)',
+        [channelId, user.id]
+      );
 
-    await insert(
-      'INSERT INTO messages (channel_id, body, type) VALUES (?, ?, ?)',
-      [generalId, `Welcome to ${name.trim()}! This is your #general channel.`, 'system']
-    );
+      if (ch === channelList[0]) {
+        await insert(
+          'INSERT INTO messages (channel_id, body, type) VALUES (?, ?, ?)',
+          [channelId, `Welcome to ${name.trim()}! This is your #${ch} channel.`, 'system']
+        );
+      }
+    }
+
+    if (inviteEmails?.length) {
+      for (const email of inviteEmails) {
+        if (!email?.trim()) continue;
+
+        let invitedUser = await queryOne('SELECT id FROM users WHERE email = ?', [email.trim()]);
+        if (!invitedUser) {
+          const uid = await insert(
+            'INSERT INTO users (email, last_seen_at) VALUES (?, NULL)',
+            [email.trim()]
+          );
+          invitedUser = { id: uid };
+        }
+
+        const alreadyMember = await queryOne(
+          'SELECT id FROM tenant_members WHERE tenant_id = ? AND user_id = ?',
+          [tenantId, invitedUser.id]
+        );
+        if (!alreadyMember) {
+          await insert(
+            'INSERT INTO tenant_members (tenant_id, user_id, role) VALUES (?, ?, ?)',
+            [tenantId, invitedUser.id, 'member']
+          );
+
+          const allChannels = await query(
+            'SELECT id FROM channels WHERE tenant_id = ?',
+            [tenantId]
+          );
+          for (const c of allChannels) {
+            await insert(
+              'INSERT INTO channel_members (channel_id, user_id) VALUES (?, ?)',
+              [c.id, invitedUser.id]
+            );
+          }
+        }
+      }
+    }
 
     return NextResponse.json({ slug, id: tenantId }, { status: 201 });
   } catch (err) {
