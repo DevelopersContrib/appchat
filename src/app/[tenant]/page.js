@@ -2,6 +2,54 @@ import Link from 'next/link';
 import { getTenantBySlug } from '@/lib/tenant.js';
 import { findVnocDomain } from '@/lib/domains.js';
 
+export async function generateMetadata({ params }) {
+  const { tenant: slug } = await params;
+
+  const tenant = await getTenantBySlug(slug);
+  if (tenant) {
+    const domain = tenant.domain || `${slug}.com`;
+    return {
+      title: `${tenant.name} — AppChat`,
+      description: `Join ${tenant.name} on AppChat. Secure chat, video calls, and AI-powered meetings.`,
+      openGraph: {
+        title: `${tenant.name} — AppChat`,
+        description: `Chat, video, and voice with ${tenant.name} on AppChat.`,
+        url: `https://appchat.com/${slug}`,
+        images: [{ url: `https://www.brandidentity.com/logo/${domain}`, alt: tenant.name }],
+      },
+      twitter: {
+        card: 'summary',
+        title: `${tenant.name} — AppChat`,
+        images: [`https://www.brandidentity.com/logo/${domain}`],
+      },
+      alternates: { canonical: `https://appchat.com/${slug}` },
+    };
+  }
+
+  const domain = await findVnocDomain(slug);
+  if (domain) {
+    return {
+      title: `${domain.domain_name} — AppChat`,
+      description: domain.description || `Join the ${domain.domain_name} community on AppChat. Chat, video calls, and AI-powered meetings.`,
+      keywords: [domain.domain_name, domain.category_name, 'chat', 'video call', 'meeting'].filter(Boolean),
+      openGraph: {
+        title: `${domain.domain_name} — Chat & Video`,
+        description: domain.title || `Connect with ${domain.domain_name} on AppChat.`,
+        url: `https://appchat.com/${slug}`,
+        images: [{ url: `https://www.brandidentity.com/logo/${domain.domain_name}`, alt: domain.domain_name }],
+      },
+      twitter: {
+        card: 'summary',
+        title: `${domain.domain_name} — AppChat`,
+        images: [`https://www.brandidentity.com/logo/${domain.domain_name}`],
+      },
+      alternates: { canonical: `https://appchat.com/${slug}` },
+    };
+  }
+
+  return { title: 'AppChat' };
+}
+
 export default async function TenantPage({ params }) {
   const { tenant: slug } = await params;
 

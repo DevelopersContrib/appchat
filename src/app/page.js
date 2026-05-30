@@ -1,5 +1,26 @@
 import Link from 'next/link';
 
+export const metadata = {
+  title: 'AppChat — White-Label Meeting Platform with AI Agents',
+  description: 'Secure chat, HD video calls, and AI agents for your organization. Deploy your branded meeting platform in minutes. Multi-tenant, white-label, CRM-integrated.',
+  keywords: ['chat platform', 'video conferencing', 'AI meeting agent', 'white-label', 'multi-tenant', 'team communication', 'LiveKit', 'Daily.co'],
+  openGraph: {
+    title: 'AppChat — Your Meetings. Your AI Agent. Your Platform.',
+    description: 'White-label chat, video, and voice with an AI agent that takes notes, answers questions, and follows up. Deploy under your brand in minutes.',
+    url: 'https://appchat.com',
+    siteName: 'AppChat',
+    type: 'website',
+    images: [{ url: 'https://www.brandidentity.com/logo/appchat.com', width: 512, height: 512, alt: 'AppChat Logo' }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'AppChat — White-Label Meeting Platform with AI Agents',
+    description: 'Deploy your branded meeting platform in minutes. Chat, video, voice + AI agent.',
+    images: ['https://www.brandidentity.com/logo/appchat.com'],
+  },
+  alternates: { canonical: 'https://appchat.com' },
+};
+
 function Nav() {
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-gray-950/80 backdrop-blur-xl border-b border-gray-800/50">
