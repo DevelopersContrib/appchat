@@ -49,6 +49,7 @@ export default function RootLayout({ children }) {
       <head>
         <link href="https://brandidentity.com/font/appchat.com" rel="stylesheet" />
         <link href="https://www.brandidentity.com/api/v1/brands/appchat.com/css?format=typography" rel="stylesheet" />
+        <script src="https://analytics.vnoc.com/tracker.js" defer />
       </head>
       <body className="bg-gray-950 text-gray-100 antialiased">
         <script
