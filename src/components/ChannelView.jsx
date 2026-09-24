@@ -214,6 +214,16 @@ export default function ChannelView({ channel, initialMessages, members, current
           </span>
           {!dmPeer && <span className="hidden sm:inline text-xs text-gray-500">{members.length} members</span>}
           <button
+            onClick={() => window.dispatchEvent(new Event('toggle-members'))}
+            className="lg:hidden p-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300"
+            title="Members"
+            aria-label="Show members"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a4 4 0 00-5-3.87M9 20H4v-2a4 4 0 015-3.87m6-4.13a4 4 0 11-8 0 4 4 0 018 0zm6 2a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          </button>
+          <button
             onClick={() => setSprintPanel({ open: true, query: '' })}
             className="px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-xs font-medium"
             title="Search sprints and add tasks"

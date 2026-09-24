@@ -1,22 +1,18 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import InstallAppButton from './InstallAppButton.jsx';
-import { usePresenceBeacon, publishRoster, PresenceDot, describePresence } from './presence.jsx';
+import { usePresenceBeacon, publishRoster, PresenceDot } from './presence.jsx';
 
 const ROSTER_POLL_MS = 15000;
-const PEOPLE_PREVIEW = 8;
 
 export default function Sidebar({ tenant, channels, dms: initialDms = [], user, role, currentSlug }) {
   const pathname = usePathname();
-  const router = useRouter();
   const inChannel = pathname.includes('/c/');
   const currentChannelId = Number(pathname.match(/\/c\/(\d+)/)?.[1]) || null;
   const [roster, setRoster] = useState({ members: [], dms: initialDms, unread: {} });
-  const [showAllPeople, setShowAllPeople] = useState(false);
-  const [openingDm, setOpeningDm] = useState(null);
 
   usePresenceBeacon({ tenant: currentSlug, channelId: currentChannelId });
 
@@ -34,9 +30,11 @@ export default function Sidebar({ tenant, channels, dms: initialDms = [], user, 
     loadRoster();
     const timer = setInterval(loadRoster, ROSTER_POLL_MS);
     window.addEventListener('focus', loadRoster);
+    window.addEventListener('appchat-dm-opened', loadRoster);
     return () => {
       clearInterval(timer);
       window.removeEventListener('focus', loadRoster);
+      window.removeEventListener('appchat-dm-opened', loadRoster);
     };
   }, [loadRoster]);
 
@@ -45,28 +43,7 @@ export default function Sidebar({ tenant, channels, dms: initialDms = [], user, 
     if (currentChannelId) setRoster((r) => ({ ...r, unread: { ...r.unread, [currentChannelId]: 0 } }));
   }, [currentChannelId]);
 
-  async function openDm(memberId) {
-    setOpeningDm(memberId);
-    try {
-      const res = await fetch('/api/dms', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tenant: currentSlug, userId: memberId }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        router.push(data.url);
-        loadRoster();
-      }
-    } finally {
-      setOpeningDm(null);
-    }
-  }
-
   const membersById = Object.fromEntries(roster.members.map((m) => [m.id, m]));
-  const onlineCount = roster.members.filter((m) => m.online).length;
-  const people = roster.members.filter((m) => m.id !== user.id);
-  const visiblePeople = showAllPeople ? people : people.filter((m) => m.online).concat(people.filter((m) => !m.online)).slice(0, PEOPLE_PREVIEW);
   // On phones the sidebar is a drawer; it starts open on the workspace home, where there's nothing else to show.
   const [mobileOpen, setMobileOpen] = useState(!inChannel);
   const [showNewChannel, setShowNewChannel] = useState(false);
@@ -164,7 +141,7 @@ export default function Sidebar({ tenant, channels, dms: initialDms = [], user, 
         })}
 
         <p className="text-xs text-gray-500 uppercase tracking-wider px-2 pt-4 mb-2">Direct messages</p>
-        {roster.dms.length === 0 && <p className="px-3 text-xs text-gray-600">Pick someone below to message them.</p>}
+        {roster.dms.length === 0 && <p className="px-3 text-xs text-gray-600">Pick someone in the member list to message them.</p>}
         {roster.dms.map((dm) => {
           const href = `/${currentSlug}/c/${dm.id}`;
           const active = pathname === href;
@@ -186,33 +163,6 @@ export default function Sidebar({ tenant, channels, dms: initialDms = [], user, 
           );
         })}
 
-        <p className="text-xs text-gray-500 uppercase tracking-wider px-2 pt-4 mb-2 flex items-center justify-between">
-          People
-          <span className="normal-case tracking-normal text-[11px] text-[#00b894]">{onlineCount} online</span>
-        </p>
-        {visiblePeople.map((m) => (
-          <button
-            key={m.id}
-            onClick={() => openDm(m.id)}
-            disabled={openingDm === m.id}
-            className="w-full flex items-start gap-2 px-3 py-1.5 rounded text-left hover:bg-gray-800 disabled:opacity-60"
-            title={`Message ${m.name}`}
-          >
-            <span className="relative mt-0.5 shrink-0">
-              <Initial name={m.name} avatar={m.avatar} />
-              <PresenceDot status={m.status} className="absolute -bottom-0.5 -right-0.5" />
-            </span>
-            <span className="min-w-0">
-              <span className={`block text-sm truncate ${m.online ? 'text-gray-200' : 'text-gray-500'}`}>{m.name}</span>
-              <span className="block text-[11px] text-gray-500 truncate">{describePresence(m)}</span>
-            </span>
-          </button>
-        ))}
-        {people.length > PEOPLE_PREVIEW && (
-          <button onClick={() => setShowAllPeople((v) => !v)} className="px-3 py-1 text-xs text-gray-500 hover:text-gray-300">
-            {showAllPeople ? 'Show fewer' : `Show all ${people.length} people`}
-          </button>
-        )}
       </nav>
 
       <div className="p-3 border-t border-gray-800">
@@ -241,15 +191,6 @@ function UnreadBadge({ count }) {
       <span className="inline-block min-w-[18px] px-1.5 rounded-full bg-[#d63031] text-white text-[10px] font-bold text-center leading-[18px]">
         {count > 99 ? '99+' : count}
       </span>
-    </span>
-  );
-}
-
-function Initial({ name, avatar }) {
-  if (avatar) return <img src={avatar} alt="" className="w-7 h-7 rounded-full" />;
-  return (
-    <span className="w-7 h-7 rounded-full bg-gray-700 flex items-center justify-center text-[11px] font-bold text-gray-200">
-      {(name || '?')[0].toUpperCase()}
     </span>
   );
 }
