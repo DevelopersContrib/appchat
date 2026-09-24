@@ -7,6 +7,7 @@ import InstallAppButton from './InstallAppButton.jsx';
 import NotificationsButton from './NotificationsButton.jsx';
 import { NewChannelDialog, BrowseChannelsDialog, ChannelSettingsDialog } from './ChannelDialogs.jsx';
 import SearchDialog from './SearchDialog.jsx';
+import ConnectAiDialog from './ConnectAiDialog.jsx';
 import { usePresenceBeacon, publishRoster, PresenceDot } from './presence.jsx';
 
 const ROSTER_POLL_MS = 15000;
@@ -254,7 +255,10 @@ export default function Sidebar({ tenant, channels, dms: initialDms = [], user, 
 
       <div className="p-3 border-t border-gray-800">
         <InstallAppButton className="mb-2" />
-        <NotificationsButton className="mb-3" />
+        <NotificationsButton className="mb-2" />
+        <button onClick={() => setDialog('ai')} className="w-full mb-3 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs text-gray-400 hover:text-gray-200 hover:bg-gray-800">
+          ✨ Connect Claude / AI
+        </button>
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-xs font-bold">
             {(user.name || user.email)[0].toUpperCase()}
@@ -292,6 +296,7 @@ export default function Sidebar({ tenant, channels, dms: initialDms = [], user, 
     )}
     {dialog === 'new' && <NewChannelDialog tenantSlug={currentSlug} onClose={() => setDialog(null)} />}
     {dialog === 'browse' && <BrowseChannelsDialog tenantSlug={currentSlug} onClose={() => setDialog(null)} />}
+    {dialog === 'ai' && <ConnectAiDialog onClose={() => setDialog(null)} />}
     {dialog === 'search' && <SearchDialog tenantSlug={currentSlug} channels={channels} onClose={() => setDialog(null)} onOpenDm={openDm} />}
     {settingsFor && <ChannelSettingsDialog channelId={settingsFor} tenantSlug={currentSlug} onClose={() => setSettingsFor(null)} />}
     </>

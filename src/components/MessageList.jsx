@@ -215,6 +215,7 @@ export default function MessageList({ messages, currentUser, hasEarlier, loading
                     <span className="font-semibold text-sm">{resolvedName || 'Unknown'}</span>
                     {meta.source === 'discord' && <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/15 text-indigo-300">Discord</span>}
                     {meta.source === 'slack' && <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#4A154B]/40 text-pink-200">Slack</span>}
+                    {meta.via && <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#6c5ce7]/20 text-[#a29bfe]" title="Posted through an AI assistant">✨ via {meta.via}</span>}
                     <span className="text-xs text-gray-500">{formatTime(msg.created_at)}</span>
                   </div>
                 )}

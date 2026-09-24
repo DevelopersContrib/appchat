@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
 import { tenantSlugForHost, isPlatformHost } from './lib/hosts.js';
 
-const PUBLIC_PATHS = ['/', '/login', '/join', '/about', '/contact', '/privacy', '/terms', '/api/auth', '/api/rooms/public', '/api/cron'];
+// /api/mcp authenticates with a personal connection key (Bearer), not the session cookie.
+const PUBLIC_PATHS = ['/', '/login', '/join', '/about', '/contact', '/privacy', '/terms', '/api/auth', '/api/rooms/public', '/api/cron', '/api/mcp'];
 const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET);
 
 // Paths that are shared app routes, not tenant pages; never prefix these with a tenant slug.
@@ -97,7 +98,7 @@ function isShared(pathname) {
 async function handleTenantHost(request, slug) {
   const { pathname } = request.nextUrl;
   // Private workspace host: everything needs a session; tenant membership is checked in [tenant]/layout.
-  const isPublic = pathname === '/login' || pathname.startsWith('/join/') || pathname.startsWith('/api/auth/') || isFile(pathname);
+  const isPublic = pathname === '/login' || pathname.startsWith('/join/') || pathname.startsWith('/api/auth/') || pathname === '/api/mcp' || isFile(pathname);
 
   if (!isPublic) {
     const token = request.cookies.get('appchat_session')?.value;
