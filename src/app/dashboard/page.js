@@ -55,6 +55,7 @@ export default async function DashboardPage() {
        JOIN tenants t ON t.id = c.tenant_id
        JOIN messages m ON m.channel_id = c.id
        WHERE c.tenant_id IN (${placeholders})
+         AND c.is_dm = 0
          AND m.created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
          AND m.type IN ('text', 'ai')
        GROUP BY c.id, c.name, t.slug, t.name

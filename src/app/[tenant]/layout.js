@@ -4,6 +4,7 @@ import { getTenantBySlug, requireMembership } from '@/lib/tenant.js';
 import { findVnocDomain } from '@/lib/domains.js';
 import { query } from '@/lib/db.js';
 import Sidebar from '@/components/Sidebar.jsx';
+import { listDms } from '@/lib/presence.js';
 
 export async function generateMetadata({ params }) {
   const { tenant: slug } = await params;
@@ -47,10 +48,11 @@ export default async function TenantLayout({ children, params }) {
     const channels = await query(
       `SELECT c.* FROM channels c
        JOIN channel_members cm ON cm.channel_id = c.id
-       WHERE c.tenant_id = ? AND cm.user_id = ?
+       WHERE c.tenant_id = ? AND cm.user_id = ? AND c.is_dm = 0
        ORDER BY c.name`,
       [tenant.id, user.id]
     );
+    const dms = await listDms(tenant.id, user.id);
 
     const tenantDomain = tenant.domain || `${slug}.com`;
 
@@ -62,6 +64,7 @@ export default async function TenantLayout({ children, params }) {
           <Sidebar
             tenant={{ ...tenant, logo_url: `https://www.brandidentity.com/logo/${tenantDomain}` }}
             channels={channels}
+            dms={JSON.parse(JSON.stringify(dms))}
             user={user}
             role={membership.role}
             currentSlug={slug}

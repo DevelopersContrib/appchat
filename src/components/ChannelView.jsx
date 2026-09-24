@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import MessageList from './MessageList.jsx';
 import MessageInput from './MessageInput.jsx';
 import SprintPanel from './SprintPanel.jsx';
+import { useRoster, PresenceDot, describePresence } from './presence.jsx';
 
 function mergeUniqueMessages(existing, incoming) {
   const map = new Map();
@@ -26,7 +27,9 @@ function mergeUniqueMessages(existing, incoming) {
   });
 }
 
-export default function ChannelView({ channel, initialMessages, members, currentUser, tenantSlug }) {
+export default function ChannelView({ channel, initialMessages, members, currentUser, tenantSlug, dmPeer }) {
+  const roster = useRoster();
+  const peerPresence = dmPeer ? roster?.members?.find((m) => m.id === dmPeer.id) : null;
   const [messages, setMessages] = useState(() => mergeUniqueMessages([], initialMessages || []));
   const pollRef = useRef(null);
   const inputRef = useRef(null);
@@ -186,18 +189,30 @@ export default function ChannelView({ channel, initialMessages, members, current
           </svg>
         </button>
         <div className="min-w-0 flex-1">
-          <h1 className="font-semibold">
-            <span className="text-gray-500">#</span> {channel.name}
-          </h1>
-          {channel.description && (
-            <p className="text-xs text-gray-500 truncate">{channel.description}</p>
+          {dmPeer ? (
+            <>
+              <h1 className="font-semibold flex items-center gap-2">
+                <PresenceDot status={peerPresence?.status || 'offline'} />
+                <span className="truncate">{dmPeer.id === currentUser?.id ? 'Notes to self' : dmPeer.name || dmPeer.email}</span>
+              </h1>
+              <p className="text-xs text-gray-500 truncate">{describePresence(peerPresence) || dmPeer.email}</p>
+            </>
+          ) : (
+            <>
+              <h1 className="font-semibold">
+                <span className="text-gray-500">#</span> {channel.name}
+              </h1>
+              {channel.description && (
+                <p className="text-xs text-gray-500 truncate">{channel.description}</p>
+              )}
+            </>
           )}
         </div>
         <div className="flex items-center gap-3">
           <span className="hidden lg:inline rounded-full bg-[#00b894]/15 px-2 py-0.5 text-[10px] font-medium uppercase text-[#00b894]">
             Brand Agent Online
           </span>
-          <span className="hidden sm:inline text-xs text-gray-500">{members.length} members</span>
+          {!dmPeer && <span className="hidden sm:inline text-xs text-gray-500">{members.length} members</span>}
           <button
             onClick={() => setSprintPanel({ open: true, query: '' })}
             className="px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-xs font-medium"

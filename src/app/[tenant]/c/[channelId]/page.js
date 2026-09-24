@@ -42,8 +42,12 @@ export default async function ChannelPage({ params }) {
     [channelId]
   );
 
+  // In a DM, the header shows the other person instead of the internal channel name.
+  const dmPeer = channel.is_dm ? (members.find((m) => m.id !== user.id) || members[0] || null) : null;
+
   return (
     <ChannelView
+      dmPeer={dmPeer ? JSON.parse(JSON.stringify(dmPeer)) : null}
       channel={channel}
       initialMessages={JSON.parse(JSON.stringify(messages))}
       members={members}

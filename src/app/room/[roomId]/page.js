@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { usePresenceBeacon } from '@/components/presence.jsx';
 import { useParams } from 'next/navigation';
 import { Room, Track, RoomEvent } from 'livekit-client';
 
@@ -72,6 +73,7 @@ function createBrandAgentAvatarTrack(brandLogoUrl) {
 
 export default function RoomPage() {
   const { roomId } = useParams();
+  usePresenceBeacon({ room: roomId });
   const [token, setToken] = useState(null);
   const [error, setError] = useState(null);
   const [LiveKitUI, setLiveKitUI] = useState(null);
