@@ -28,7 +28,7 @@ export default async function ChannelPage({ params }) {
     `SELECT m.*, u.name as author_name, u.email as author_email, u.avatar_url as author_avatar
      FROM messages m
      LEFT JOIN users u ON u.id = m.user_id
-     WHERE m.channel_id = ?
+     WHERE m.channel_id = ? AND m.deleted_at IS NULL
      ORDER BY m.created_at DESC, m.id DESC
      LIMIT 100`,
     [channelId]
@@ -42,11 +42,18 @@ export default async function ChannelPage({ params }) {
     [channelId]
   );
 
+  const membership = await queryOne(
+    'SELECT role FROM tenant_members WHERE tenant_id = ? AND user_id = ?',
+    [channel.tenant_id, user.id]
+  );
+  const canModerate = ['owner', 'admin'].includes(membership?.role) || Boolean(user.is_admin);
+
   // In a DM, the header shows the other person instead of the internal channel name.
   const dmPeer = channel.is_dm ? (members.find((m) => m.id !== user.id) || members[0] || null) : null;
 
   return (
     <ChannelView
+      canModerate={canModerate}
       dmPeer={dmPeer ? JSON.parse(JSON.stringify(dmPeer)) : null}
       channel={channel}
       initialMessages={JSON.parse(JSON.stringify(messages))}

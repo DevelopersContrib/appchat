@@ -40,7 +40,7 @@ function parseMetadata(metadata) {
   }
 }
 
-export default function MessageList({ messages, currentUser, hasEarlier, loadingEarlier, onLoadEarlier }) {
+export default function MessageList({ messages, currentUser, hasEarlier, loadingEarlier, onLoadEarlier, canModerate, onDelete }) {
   const endRef = useRef(null);
   const newestId = messages[messages.length - 1]?.id;
   const metas = useMemo(() => messages.map((m) => parseMetadata(m.metadata)), [messages]);
@@ -127,7 +127,16 @@ export default function MessageList({ messages, currentUser, hasEarlier, loading
         return (
           <div key={renderKey}>
             {showDate && <DateDivider date={msgDate} />}
-            <div className={`group flex gap-3 hover:bg-gray-800/50 rounded px-2 ${compact ? 'py-0.5' : 'py-2 mt-2'}`}>
+            <div className={`group relative flex gap-3 hover:bg-gray-800/50 rounded px-2 ${compact ? 'py-0.5' : 'py-2 mt-2'}`}>
+              {onDelete && (isCurrentUser || canModerate) && !String(msg.id).startsWith('temp-') && (
+                <button
+                  onClick={() => onDelete(msg)}
+                  className="absolute right-2 top-1 hidden group-hover:block group-focus-within:block px-2 py-0.5 rounded-md border border-gray-700 bg-gray-900 text-[11px] text-gray-400 hover:text-red-400"
+                  title={isCurrentUser ? 'Delete message' : 'Delete as moderator'}
+                >
+                  Delete
+                </button>
+              )}
               {compact ? (
                 <div className="w-9 flex-shrink-0">
                   <span className="text-[10px] text-gray-600 opacity-0 group-hover:opacity-100">

@@ -27,7 +27,7 @@ function mergeUniqueMessages(existing, incoming) {
   });
 }
 
-export default function ChannelView({ channel, initialMessages, members, currentUser, tenantSlug, dmPeer }) {
+export default function ChannelView({ channel, initialMessages, members, currentUser, tenantSlug, dmPeer, canModerate }) {
   const roster = useRoster();
   const peerPresence = dmPeer ? roster?.members?.find((m) => m.id === dmPeer.id) : null;
   const [messages, setMessages] = useState(() => mergeUniqueMessages([], initialMessages || []));
@@ -79,9 +79,11 @@ export default function ChannelView({ channel, initialMessages, members, current
     return () => clearInterval(pollRef.current);
   }, [pollMessages]);
 
+  // The Brand Agent lives in channels, not in direct messages.
   useEffect(() => {
+    if (dmPeer) return;
     fetch(`/api/channels/${channel.id}/agent`, { method: 'POST' }).catch(() => {});
-  }, [channel.id]);
+  }, [channel.id, dmPeer]);
 
   // Chat shortcuts: "/task [domain.com] title" adds a task, "/sprints [search]" opens the sprint panel.
   async function runCommand(text) {
@@ -109,6 +111,14 @@ export default function ChannelView({ channel, initialMessages, members, current
       return true;
     }
     return false;
+  }
+
+  async function handleDelete(msg) {
+    const own = msg.user_id === currentUser?.id;
+    if (!window.confirm(own ? 'Delete this message?' : 'Delete this message as a moderator? This is logged.')) return;
+    const res = await fetch(`/api/channels/${channel.id}/messages/${msg.id}`, { method: 'DELETE' });
+    if (res.ok) setMessages((prev) => prev.filter((m) => m.id !== msg.id));
+    else setCommandError((await res.json().catch(() => ({}))).error || 'Could not delete the message');
   }
 
   async function handleSend(body, attachments) {
@@ -199,9 +209,13 @@ export default function ChannelView({ channel, initialMessages, members, current
             </>
           ) : (
             <>
-              <h1 className="font-semibold">
-                <span className="text-gray-500">#</span> {channel.name}
-              </h1>
+              <button
+                onClick={() => window.dispatchEvent(new CustomEvent('open-channel-settings', { detail: channel.id }))}
+                className="font-semibold hover:underline text-left"
+                title="Channel settings"
+              >
+                <span className="text-gray-500">{channel.is_private ? '🔒' : '#'}</span> {channel.name}
+              </button>
               {channel.description && (
                 <p className="text-xs text-gray-500 truncate">{channel.description}</p>
               )}
@@ -209,9 +223,11 @@ export default function ChannelView({ channel, initialMessages, members, current
           )}
         </div>
         <div className="flex items-center gap-3">
-          <span className="hidden lg:inline rounded-full bg-[#00b894]/15 px-2 py-0.5 text-[10px] font-medium uppercase text-[#00b894]">
-            Brand Agent Online
-          </span>
+          {!dmPeer && (
+            <span className="hidden lg:inline rounded-full bg-[#00b894]/15 px-2 py-0.5 text-[10px] font-medium uppercase text-[#00b894]">
+              Brand Agent Online
+            </span>
+          )}
           {!dmPeer && <span className="hidden sm:inline text-xs text-gray-500">{members.length} members</span>}
           <button
             onClick={() => window.dispatchEvent(new Event('toggle-members'))}
@@ -230,6 +246,7 @@ export default function ChannelView({ channel, initialMessages, members, current
           >
             Sprints
           </button>
+          {!dmPeer && (
           <button
             onClick={openAgentMeetingTab}
             className="px-3.5 py-2 bg-gradient-to-r from-[#00b894] to-[#00a783] hover:opacity-95 rounded-lg text-xs font-medium transition flex items-center gap-1.5 shadow-lg shadow-[#00b894]/20"
@@ -241,6 +258,7 @@ export default function ChannelView({ channel, initialMessages, members, current
             <span className="hidden sm:inline">Start Agent Meeting</span>
             <span className="sm:hidden">Meet</span>
           </button>
+          )}
         </div>
       </header>
 
@@ -250,6 +268,8 @@ export default function ChannelView({ channel, initialMessages, members, current
         hasEarlier={hasEarlier}
         loadingEarlier={loadingEarlier}
         onLoadEarlier={loadEarlier}
+        canModerate={canModerate}
+        onDelete={handleDelete}
       />
       {commandError && (
         <p className="px-5 pb-1 text-xs text-red-400">{commandError}</p>

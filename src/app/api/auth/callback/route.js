@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { authenticateWithMagic } from '@/lib/auth.js';
 import { rateLimit, getClientIp } from '@/lib/security.js';
 import { tenantSlugForHost } from '@/lib/hosts.js';
+import { syncContribProfile } from '@/lib/contrib.js';
 
 export async function POST(request) {
   const ip = getClientIp(request);
@@ -16,6 +17,8 @@ export async function POST(request) {
     }
 
     const { user, token } = await authenticateWithMagic(didToken, { membersOnly: true });
+    // Pull name and photo from the person's contrib.com profile.
+    await syncContribProfile(user);
 
     const redirectTo = tenantSlugForHost(request.headers.get('host')) ? '/' : '/dashboard';
 

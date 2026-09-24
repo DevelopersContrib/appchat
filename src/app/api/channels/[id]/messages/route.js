@@ -1,9 +1,11 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import { requireSession } from '@/lib/auth.js';
 import { query, insert, queryOne } from '@/lib/db.js';
 import { unfurlUrl } from '@/lib/unfurl.js';
 import { rateLimit, getClientIp, sanitizeString, sanitizeUrl } from '@/lib/security.js';
 import { parseChannelFromKey, fileUrlForKey } from '@/lib/storage.js';
+import { assertCanPost, applyWordFilter } from '@/lib/workspace.js';
+import { notifyOfflineDmRecipients } from '@/lib/notify.js';
 import { buildBrandAgentReply } from '@/lib/brand-agent.js';
 import { generateClaudeAgentReply } from '@/lib/claude-agent.js';
 import { parseTenantSettings, resolveToneProfile } from '@/lib/brand-agent-profiles.js';
@@ -22,7 +24,7 @@ export async function GET(request, { params }) {
 
     let sql = `SELECT m.*, u.name as author_name, u.email as author_email, u.avatar_url as author_avatar
                FROM messages m LEFT JOIN users u ON u.id = m.user_id
-               WHERE m.channel_id = ?`;
+               WHERE m.channel_id = ? AND m.deleted_at IS NULL`;
     const params2 = [channelId];
 
     const before = request.nextUrl.searchParams.get('before');
@@ -96,7 +98,14 @@ export async function POST(request, { params }) {
     );
     if (!isMember) return NextResponse.json({ error: 'Not a member' }, { status: 403 });
 
-    const normalizedBody = body?.trim() || (attachments.length ? 'Shared attachment' : '');
+    // Moderation: muted members can't post; banned words are masked.
+    let workspaceSettings;
+    try {
+      workspaceSettings = await assertCanPost(channelId, user.id);
+    } catch (err) {
+      return NextResponse.json({ error: err.message }, { status: err.status || 403 });
+    }
+    const normalizedBody = applyWordFilter(body?.trim(), workspaceSettings.bannedWords) || (attachments.length ? 'Shared attachment' : '');
     const msgId = await insert(
       'INSERT INTO messages (channel_id, user_id, body, thread_id) VALUES (?, ?, ?, ?)',
       [channelId, user.id, normalizedBody, threadId || null]
@@ -247,6 +256,11 @@ export async function POST(request, { params }) {
           );
         }
       }
+    }
+
+    // DMs to someone who's offline also go to their email (throttled), after the response is sent.
+    if (workspaceSettings.emailOfflineDms !== false) {
+      after(() => notifyOfflineDmRecipients({ channelId: Number(channelId), sender: user, body: normalizedBody }).catch((err) => console.error('[notify]', err)));
     }
 
     return NextResponse.json(message, { status: 201 });

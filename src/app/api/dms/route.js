@@ -41,5 +41,8 @@ export async function POST(request) {
     channel = { id };
   }
 
+  // Reopening a closed DM brings it back to the sidebar.
+  await query('UPDATE channel_members SET hidden_at = NULL WHERE channel_id = ? AND user_id = ?', [channel.id, user.id]);
+
   return NextResponse.json({ channelId: channel.id, url: `/${membership.slug}/c/${channel.id}` });
 }

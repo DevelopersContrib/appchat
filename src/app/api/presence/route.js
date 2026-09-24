@@ -3,6 +3,7 @@ import { requireSession } from '@/lib/auth.js';
 import { query, queryOne } from '@/lib/db.js';
 import { requireMembership } from '@/lib/tenant.js';
 import { listDms, ONLINE_WINDOW_SECONDS } from '@/lib/presence.js';
+import { contribProfileUrl } from '@/lib/contrib.js';
 
 // Heartbeat: the open app reports where the user is (channel or meeting) every ~30s.
 export async function POST(request) {
@@ -66,7 +67,7 @@ export async function GET(request) {
   const tenantId = membership.tenant_id;
 
   const rows = await query(
-    `SELECT u.id, u.name, u.email, u.avatar_url, u.last_seen_at, tm.role,
+    `SELECT u.id, u.name, u.email, u.avatar_url, u.last_seen_at, u.contrib_username, tm.role,
             p.status, p.timezone, p.updated_at AS presence_at,
             (p.tenant_id = ? AND p.updated_at > NOW() - INTERVAL ${ONLINE_WINDOW_SECONDS} SECOND) AS online,
             c.id AS channel_id, c.name AS channel_name, c.is_dm, c.is_private,
@@ -104,6 +105,7 @@ export async function GET(request) {
       where,
       timezone: r.timezone,
       lastSeenAt: r.last_seen_at,
+      contribUrl: contribProfileUrl(r.contrib_username),
     };
   });
 
@@ -112,7 +114,7 @@ export async function GET(request) {
      FROM channels c
      JOIN channel_members cm ON cm.channel_id = c.id AND cm.user_id = ?
      JOIN messages m ON m.channel_id = c.id AND m.created_at > cm.last_read_at
-       AND (m.user_id IS NULL OR m.user_id <> ?) AND m.type <> 'system'
+       AND (m.user_id IS NULL OR m.user_id <> ?) AND m.type <> 'system' AND m.deleted_at IS NULL
      WHERE c.tenant_id = ?
      GROUP BY c.id`,
     [user.id, user.id, tenantId]

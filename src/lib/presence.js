@@ -16,6 +16,8 @@ export async function listDms(tenantId, userId) {
      LEFT JOIN channel_members o ON o.channel_id = c.id AND o.user_id <> me.user_id
      LEFT JOIN users peer ON peer.id = o.user_id
      WHERE c.tenant_id = ? AND c.is_dm = 1
+       AND (me.hidden_at IS NULL OR EXISTS (
+         SELECT 1 FROM messages m WHERE m.channel_id = c.id AND m.created_at > me.hidden_at AND m.deleted_at IS NULL))
      ORDER BY c.id DESC`,
     [userId, tenantId]
   );

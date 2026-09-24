@@ -1,15 +1,17 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import InstallAppButton from './InstallAppButton.jsx';
+import { NewChannelDialog, BrowseChannelsDialog, ChannelSettingsDialog } from './ChannelDialogs.jsx';
 import { usePresenceBeacon, publishRoster, PresenceDot } from './presence.jsx';
 
 const ROSTER_POLL_MS = 15000;
 
 export default function Sidebar({ tenant, channels, dms: initialDms = [], user, role, currentSlug }) {
   const pathname = usePathname();
+  const router = useRouter();
   const inChannel = pathname.includes('/c/');
   const currentChannelId = Number(pathname.match(/\/c\/(\d+)/)?.[1]) || null;
   const [roster, setRoster] = useState({ members: [], dms: initialDms, unread: {} });
@@ -46,33 +48,95 @@ export default function Sidebar({ tenant, channels, dms: initialDms = [], user, 
   const membersById = Object.fromEntries(roster.members.map((m) => [m.id, m]));
   // On phones the sidebar is a drawer; it starts open on the workspace home, where there's nothing else to show.
   const [mobileOpen, setMobileOpen] = useState(!inChannel);
-  const [showNewChannel, setShowNewChannel] = useState(false);
+  const [dialog, setDialog] = useState(null); // 'new' | 'browse'
+  const [settingsFor, setSettingsFor] = useState(null);
+  const [menu, setMenu] = useState(null); // { x, y, kind: 'channel' | 'dm', id, name }
+  const isAdmin = ['owner', 'admin'].includes(role);
 
   useEffect(() => {
     const toggle = () => setMobileOpen((o) => !o);
+    const openSettings = (e) => setSettingsFor(e.detail);
     window.addEventListener('toggle-sidebar', toggle);
-    return () => window.removeEventListener('toggle-sidebar', toggle);
+    window.addEventListener('open-channel-settings', openSettings);
+    return () => {
+      window.removeEventListener('toggle-sidebar', toggle);
+      window.removeEventListener('open-channel-settings', openSettings);
+    };
   }, []);
 
   useEffect(() => {
     if (inChannel) setMobileOpen(false);
   }, [pathname, inChannel]);
-  const [newName, setNewName] = useState('');
 
-  async function createChannel(e) {
-    e.preventDefault();
-    if (!newName.trim()) return;
+  useEffect(() => {
+    if (!menu) return;
+    const close = () => setMenu(null);
+    window.addEventListener('click', close);
+    window.addEventListener('scroll', close, true);
+    return () => {
+      window.removeEventListener('click', close);
+      window.removeEventListener('scroll', close, true);
+    };
+  }, [menu]);
 
-    await fetch('/api/channels', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tenant: currentSlug, name: newName.trim() }),
-    });
-
-    setNewName('');
-    setShowNewChannel(false);
-    window.location.reload();
+  // Right-click on desktop; press-and-hold on phones.
+  function menuHandlers(kind, item) {
+    let timer;
+    const open = (x, y) => setMenu({ x: Math.min(x, window.innerWidth - 220), y: Math.min(y, window.innerHeight - 200), kind, ...item });
+    return {
+      onContextMenu: (e) => {
+        e.preventDefault();
+        open(e.clientX, e.clientY);
+      },
+      onTouchStart: (e) => {
+        const t = e.touches[0];
+        timer = setTimeout(() => open(t.clientX, t.clientY), 500);
+      },
+      onTouchEnd: () => clearTimeout(timer),
+      onTouchMove: () => clearTimeout(timer),
+    };
   }
+
+  async function markRead(id) {
+    await fetch(`/api/channels/${id}/read`, { method: 'POST' });
+    setRoster((r) => ({ ...r, unread: { ...r.unread, [id]: 0 } }));
+  }
+
+  async function leaveChannel(id) {
+    const res = await fetch(`/api/channels/${id}/members`, { method: 'DELETE' });
+    if (res.ok) {
+      if (currentChannelId === id) router.push(`/${currentSlug}`);
+      router.refresh();
+    }
+  }
+
+  async function closeDm(id) {
+    const res = await fetch(`/api/dms/${id}`, { method: 'DELETE' });
+    if (res.ok) {
+      setRoster((r) => ({ ...r, dms: r.dms.filter((d) => d.id !== id) }));
+      if (currentChannelId === id) router.push(`/${currentSlug}`);
+    }
+  }
+
+  const rowClass = (active, unread) =>
+    `group flex items-center gap-2 px-3 py-2 md:py-1.5 rounded text-sm transition ${
+      active ? 'bg-blue-600/20 text-blue-400' : unread ? 'text-white font-semibold hover:bg-gray-800' : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
+    }`;
+
+  const moreButton = (kind, item) => (
+    <button
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const r = e.currentTarget.getBoundingClientRect();
+        setMenu({ x: Math.min(r.left, window.innerWidth - 220), y: r.bottom + 4, kind, ...item });
+      }}
+      className="ml-1 opacity-100 md:opacity-0 group-hover:opacity-100 text-gray-500 hover:text-white px-1"
+      aria-label="More options"
+    >
+      ⋯
+    </button>
+  );
 
   return (
     <>
@@ -88,63 +152,46 @@ export default function Sidebar({ tenant, channels, dms: initialDms = [], user, 
         {tenant.logo_url && (
           <img src={tenant.logo_url} alt="" className="h-7 w-7 rounded" />
         )}
-        <div>
-          <h2 className="font-semibold text-sm">{tenant.name}</h2>
+        <div className="min-w-0 flex-1">
+          <h2 className="font-semibold text-sm truncate">{tenant.name}</h2>
           <p className="text-xs text-gray-500">{role}</p>
         </div>
+        {isAdmin && (
+          <Link href={`/${currentSlug}/settings`} title="Workspace settings" aria-label="Workspace settings" className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.3 4.3c.4-1.7 3-1.7 3.4 0a1.7 1.7 0 002.6 1.1c1.5-.9 3.3.8 2.4 2.4a1.7 1.7 0 001 2.5c1.8.4 1.8 3 0 3.4a1.7 1.7 0 00-1 2.6c.9 1.5-.9 3.3-2.4 2.4a1.7 1.7 0 00-2.6 1c-.4 1.8-3 1.8-3.4 0a1.7 1.7 0 00-2.5-1c-1.6.9-3.3-.9-2.4-2.4a1.7 1.7 0 00-1.1-2.6c-1.7-.4-1.7-3 0-3.4a1.7 1.7 0 001.1-2.5c-.9-1.6.8-3.3 2.4-2.4a1.7 1.7 0 002.5-1.1z" />
+              <circle cx="12" cy="12" r="3" strokeWidth={2} />
+            </svg>
+          </Link>
+        )}
       </div>
 
       <nav className="flex-1 overflow-y-auto p-3 space-y-1">
         <p className="text-xs text-gray-500 uppercase tracking-wider px-2 mb-2 flex items-center justify-between">
           Channels
-          {['owner', 'admin'].includes(role) && (
-            <button
-              onClick={() => setShowNewChannel(!showNewChannel)}
-              className="text-gray-400 hover:text-white text-lg leading-none"
-            >
+          {role !== 'guest' && (
+            <button onClick={() => setDialog('new')} className="text-gray-400 hover:text-white text-lg leading-none" title="Create a channel" aria-label="Create a channel">
               +
             </button>
           )}
         </p>
-
-        {['owner', 'admin'].includes(role) && (
-          <Link href={`/${currentSlug}/import/discord`} className="block px-3 pb-1 text-[11px] text-gray-500 hover:text-[#8b93ff]">
-            Import from Discord
-          </Link>
-        )}
-
-        {showNewChannel && (
-          <form onSubmit={createChannel} className="px-2 mb-2">
-            <input
-              autoFocus
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              placeholder="channel-name"
-              className="w-full px-2 py-1 bg-gray-800 border border-gray-700 rounded text-sm focus:outline-none focus:border-blue-500"
-            />
-          </form>
-        )}
 
         {channels.map((ch) => {
           const href = `/${currentSlug}/c/${ch.id}`;
           const active = pathname === href;
           const unread = roster.unread[ch.id] || 0;
           return (
-            <Link
-              key={ch.id}
-              href={href}
-              className={`flex items-center px-3 py-2 md:py-1.5 rounded text-sm transition ${
-                active
-                  ? 'bg-blue-600/20 text-blue-400'
-                  : unread ? 'text-white font-semibold hover:bg-gray-800' : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
-              }`}
-            >
-              <span className="text-gray-600 mr-1">#</span>
+            <Link key={ch.id} href={href} className={rowClass(active, unread)} {...menuHandlers('channel', { id: ch.id, name: ch.name })}>
+              <span className="text-gray-600 w-3 text-center shrink-0">{ch.is_private ? '🔒' : '#'}</span>
               <span className="truncate">{ch.name}</span>
               {unread > 0 && !active && <UnreadBadge count={unread} />}
+              {moreButton('channel', { id: ch.id, name: ch.name })}
             </Link>
           );
         })}
+        <button onClick={() => setDialog('browse')} className="w-full text-left px-3 py-1.5 text-xs text-gray-500 hover:text-gray-300">
+          Browse channels
+        </button>
 
         <p className="text-xs text-gray-500 uppercase tracking-wider px-2 pt-4 mb-2">Direct messages</p>
         {roster.dms.length === 0 && <p className="px-3 text-xs text-gray-600">Pick someone in the member list to message them.</p>}
@@ -155,16 +202,11 @@ export default function Sidebar({ tenant, channels, dms: initialDms = [], user, 
           const peer = membersById[dm.peer_id];
           const name = dm.peer_id === user.id ? `${dm.peer_name || dm.peer_email} (you)` : dm.peer_name || dm.peer_email;
           return (
-            <Link
-              key={dm.id}
-              href={href}
-              className={`flex items-center gap-2 px-3 py-2 md:py-1.5 rounded text-sm transition ${
-                active ? 'bg-blue-600/20 text-blue-400' : unread ? 'text-white font-semibold hover:bg-gray-800' : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
-              }`}
-            >
+            <Link key={dm.id} href={href} className={rowClass(active, unread)} {...menuHandlers('dm', { id: dm.id, name })}>
               <PresenceDot status={peer?.status || 'offline'} />
               <span className="truncate">{name}</span>
               {unread > 0 && !active && <UnreadBadge count={unread} />}
+              {moreButton('dm', { id: dm.id, name })}
             </Link>
           );
         })}
@@ -187,7 +229,39 @@ export default function Sidebar({ tenant, channels, dms: initialDms = [], user, 
         </div>
       </div>
     </aside>
+
+    {menu && (
+      <div
+        role="menu"
+        className="fixed z-[70] w-52 rounded-xl border border-gray-700 bg-gray-900 shadow-2xl py-1 text-sm"
+        style={{ left: menu.x, top: menu.y }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <p className="px-3 py-1.5 text-[11px] text-gray-500 truncate">{menu.kind === 'dm' ? menu.name : `#${menu.name}`}</p>
+        {menu.kind === 'channel' && (
+          <MenuItem onClick={() => { setSettingsFor(menu.id); setMenu(null); }}>Channel settings</MenuItem>
+        )}
+        <MenuItem onClick={() => { markRead(menu.id); setMenu(null); }}>Mark as read</MenuItem>
+        {menu.kind === 'channel' && (
+          <MenuItem danger onClick={() => { leaveChannel(menu.id); setMenu(null); }}>Leave channel</MenuItem>
+        )}
+        {menu.kind === 'dm' && (
+          <MenuItem danger onClick={() => { closeDm(menu.id); setMenu(null); }}>Close conversation</MenuItem>
+        )}
+      </div>
+    )}
+    {dialog === 'new' && <NewChannelDialog tenantSlug={currentSlug} onClose={() => setDialog(null)} />}
+    {dialog === 'browse' && <BrowseChannelsDialog tenantSlug={currentSlug} onClose={() => setDialog(null)} />}
+    {settingsFor && <ChannelSettingsDialog channelId={settingsFor} tenantSlug={currentSlug} onClose={() => setSettingsFor(null)} />}
     </>
+  );
+}
+
+function MenuItem({ children, onClick, danger }) {
+  return (
+    <button role="menuitem" onClick={onClick} className={`w-full text-left px-3 py-2 hover:bg-gray-800 ${danger ? 'text-red-400' : 'text-gray-200'}`}>
+      {children}
+    </button>
   );
 }
 

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useRoster, PresenceDot, describePresence } from './presence.jsx';
+import { useRoster, PresenceDot, describePresence, localTime } from './presence.jsx';
 
 // Discord-style member list on the right. Always visible on wide screens; a drawer
 // (toggled by the header's People button) on phones and tablets.
@@ -12,6 +12,7 @@ export default function MemberList({ currentSlug, currentUserId }) {
   const [open, setOpen] = useState(false);
   const [opening, setOpening] = useState(null);
   const [filter, setFilter] = useState('');
+  const [profile, setProfile] = useState(null);
 
   useEffect(() => {
     const toggle = () => setOpen((o) => !o);
@@ -30,6 +31,7 @@ export default function MemberList({ currentSlug, currentUserId }) {
       const data = await res.json();
       if (res.ok) {
         setOpen(false);
+        setProfile(null);
         router.push(data.url);
         window.dispatchEvent(new Event('appchat-dm-opened'));
       }
@@ -48,10 +50,9 @@ export default function MemberList({ currentSlug, currentUserId }) {
   const row = (m) => (
     <li key={m.id}>
       <button
-        onClick={() => openDm(m.id)}
-        disabled={opening === m.id}
-        className="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg text-left hover:bg-gray-800/70 disabled:opacity-60"
-        title={m.id === currentUserId ? 'Notes to self' : `Message ${m.name}`}
+        onClick={() => setProfile(m)}
+        className="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg text-left hover:bg-gray-800/70"
+        title={`View ${m.name}`}
       >
         <span className="relative shrink-0">
           {m.avatar ? (
@@ -110,6 +111,65 @@ export default function MemberList({ currentSlug, currentUserId }) {
           )}
         </div>
       </aside>
+      {profile && (
+        <ProfileCard
+          member={roster?.members?.find((x) => x.id === profile.id) || profile}
+          isMe={profile.id === currentUserId}
+          busy={opening === profile.id}
+          onMessage={() => openDm(profile.id)}
+          onClose={() => setProfile(null)}
+        />
+      )}
     </>
+  );
+}
+
+function ProfileCard({ member: m, isMe, busy, onMessage, onClose }) {
+  const time = localTime(m.timezone);
+  return (
+    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/50" onMouseDown={onClose}>
+      <div
+        role="dialog"
+        aria-label={`${m.name}'s profile`}
+        onMouseDown={(e) => e.stopPropagation()}
+        className="w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl bg-gray-900 border border-gray-800 overflow-hidden"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      >
+        <div className="h-16 bg-gradient-to-r from-[#d63031]/60 to-[#6c5ce7]/60" />
+        <div className="px-5 pb-5 -mt-8 space-y-3">
+          <span className="relative inline-block">
+            {m.avatar ? (
+              <img src={m.avatar} alt="" className="w-16 h-16 rounded-full ring-4 ring-gray-900 object-cover bg-gray-800" />
+            ) : (
+              <span className="w-16 h-16 rounded-full ring-4 ring-gray-900 bg-gray-700 flex items-center justify-center text-xl font-bold">
+                {(m.name || '?')[0].toUpperCase()}
+              </span>
+            )}
+            <PresenceDot status={m.status} className="absolute bottom-0.5 right-0.5 w-3.5 h-3.5" />
+          </span>
+          <div>
+            <p className="text-lg font-semibold flex items-center gap-2">
+              {m.name}
+              {['owner', 'admin'].includes(m.role) && <span className="text-[10px] uppercase px-1.5 rounded bg-[#fdcb6e]/15 text-[#fdcb6e]">{m.role}</span>}
+            </p>
+            <p className="text-sm text-gray-400">{m.email}</p>
+          </div>
+          <div className="rounded-xl bg-gray-950 border border-gray-800 p-3 text-sm space-y-1">
+            <p className="text-gray-200">{m.online ? (m.status === 'away' ? 'Away' : m.where?.label || 'Online') : 'Offline'}</p>
+            <p className="text-xs text-gray-500">{time ? `${time} local time` : 'Local time unknown'}{!m.online ? ` · ${describePresence(m).split(' · ')[0]}` : ''}</p>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={onMessage} disabled={busy} className="flex-1 py-2 rounded-lg bg-[#00b894] hover:bg-[#00a383] disabled:opacity-50 text-sm font-medium text-white">
+              {isMe ? 'Notes to self' : m.online ? 'Message' : 'Message (they’ll get an email)'}
+            </button>
+            {m.contribUrl && (
+              <a href={m.contribUrl} target="_blank" rel="noopener noreferrer" className="px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-sm">
+                contrib.com profile
+              </a>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

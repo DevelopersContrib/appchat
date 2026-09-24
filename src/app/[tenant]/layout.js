@@ -6,6 +6,8 @@ import { query } from '@/lib/db.js';
 import Sidebar from '@/components/Sidebar.jsx';
 import MemberList from '@/components/MemberList.jsx';
 import { listDms } from '@/lib/presence.js';
+import { parseTenantSettings } from '@/lib/brand-agent-profiles.js';
+import RulesGate from '@/components/RulesGate.jsx';
 
 export async function generateMetadata({ params }) {
   const { tenant: slug } = await params;
@@ -46,11 +48,16 @@ export default async function TenantLayout({ children, params }) {
       );
     }
 
+    const settings = parseTenantSettings(tenant.settings);
+    if (settings.requireRules && settings.rules && !membership.rules_accepted_at) {
+      return <RulesGate tenantSlug={slug} tenantName={tenant.name} rules={settings.rules} />;
+    }
+
     const channels = await query(
       `SELECT c.* FROM channels c
        JOIN channel_members cm ON cm.channel_id = c.id
-       WHERE c.tenant_id = ? AND cm.user_id = ? AND c.is_dm = 0
-       ORDER BY c.name`,
+       WHERE c.tenant_id = ? AND cm.user_id = ? AND c.is_dm = 0 AND c.archived_at IS NULL
+       ORDER BY c.is_private, c.name`,
       [tenant.id, user.id]
     );
     const dms = await listDms(tenant.id, user.id);

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
 import { tenantSlugForHost } from './lib/hosts.js';
 
-const PUBLIC_PATHS = ['/', '/login', '/about', '/contact', '/privacy', '/terms', '/api/auth', '/api/rooms/public'];
+const PUBLIC_PATHS = ['/', '/login', '/about', '/contact', '/privacy', '/terms', '/api/auth', '/api/rooms/public', '/api/cron'];
 const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET);
 
 // Paths that are shared app routes, not tenant pages; never prefix these with a tenant slug.
