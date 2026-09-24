@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth.js';
-import { getGoogleAuthUrl, getValidToken } from '@/lib/gdrive.js';
+import { getGoogleAuthUrl, getValidToken, DRIVE_SCOPE, CALENDAR_SCOPE } from '@/lib/gdrive.js';
 import { queryOne } from '@/lib/db.js';
 
 export async function GET(request) {
@@ -19,10 +19,11 @@ export async function GET(request) {
 export async function POST(request) {
   try {
     const user = await requireSession();
-    const { returnTo } = await request.json();
+    const { returnTo, scopes } = await request.json();
 
     const state = JSON.stringify({ userId: user.id, returnTo: returnTo || '/' });
-    const authUrl = getGoogleAuthUrl(Buffer.from(state).toString('base64'));
+    const wanted = Array.isArray(scopes) && scopes.includes('calendar') ? [CALENDAR_SCOPE] : [DRIVE_SCOPE];
+    const authUrl = getGoogleAuthUrl(Buffer.from(state).toString('base64'), wanted);
 
     return NextResponse.json({ authUrl });
   } catch (err) {

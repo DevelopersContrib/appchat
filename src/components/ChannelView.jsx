@@ -124,9 +124,48 @@ export default function ChannelView({ channel, initialMessages, members, current
     fetch(`/api/channels/${channel.id}/agent`, { method: 'POST' }).catch(() => {});
   }, [channel.id, dmPeer]);
 
-  // Chat shortcuts: "/task [domain.com] title" adds a task, "/sprints [search]" opens the sprint panel.
+  const [meetMenu, setMeetMenu] = useState(false);
+  const [scheduling, setScheduling] = useState(false);
+
+  // Google Meet: starts now unless `start` is given; bounces through Google sign-in the first time.
+  async function startMeet(opts = {}) {
+    setMeetMenu(false);
+    setCommandError('');
+    let timeZone;
+    try { timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch {}
+    const res = await fetch(`/api/channels/${channel.id}/meet`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...opts, timeZone }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (data.needsGoogle) {
+      window.location.href = data.authUrl;
+      return;
+    }
+    if (!res.ok) return setCommandError(data.error || 'Could not create the Google Meet');
+    if (!opts.start) window.open(data.url, '_blank', 'noopener,noreferrer');
+    pollMessages();
+  }
+
+  // Back from connecting Google Calendar: reopen the Meet menu.
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get('meet') === '1') {
+      setMeetMenu(true);
+      url.searchParams.delete('meet');
+      window.history.replaceState(null, '', url.pathname + url.search);
+    }
+  }, []);
+
+  // Chat shortcuts: "/task [domain.com] title" adds a task, "/sprints [search]" opens the sprint panel,
+  // "/meet [title]" starts a Google Meet.
   async function runCommand(text) {
     const [cmd, ...rest] = text.trim().split(/\s+/);
+    if (cmd === '/meet') {
+      await startMeet({ title: rest.join(' ') || undefined });
+      return true;
+    }
     if (cmd === '/sprints' || cmd === '/sprint') {
       setSprintPanel({ open: true, query: rest.join(' ') });
       return true;
@@ -304,19 +343,38 @@ export default function ChannelView({ channel, initialMessages, members, current
           >
             Sprints
           </button>
-          {!dmPeer && (
-          <button
-            onClick={openAgentMeetingTab}
-            className="px-3.5 py-2 bg-gradient-to-r from-[#00b894] to-[#00a783] hover:opacity-95 rounded-lg text-xs font-medium transition flex items-center gap-1.5 shadow-lg shadow-[#00b894]/20"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-            </svg>
-            <span className="hidden sm:inline">Start Agent Meeting</span>
-            <span className="sm:hidden">Meet</span>
-          </button>
-          )}
+          <div className="relative">
+            <button
+              onClick={() => setMeetMenu((v) => !v)}
+              className="px-3.5 py-2 bg-gradient-to-r from-[#00b894] to-[#00a783] hover:opacity-95 rounded-lg text-xs font-medium transition flex items-center gap-1.5 shadow-lg shadow-[#00b894]/20"
+              aria-haspopup="menu"
+              aria-expanded={meetMenu}
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
+              Meet ▾
+            </button>
+            {meetMenu && (
+              <div role="menu" className="absolute right-0 top-full mt-1 z-40 w-64 rounded-xl border border-gray-700 bg-gray-900 shadow-2xl py-1 text-sm">
+                <button role="menuitem" onClick={() => startMeet()} className="w-full text-left px-3 py-2 hover:bg-gray-800">
+                  <span className="block text-gray-100">Start Google Meet now</span>
+                  <span className="block text-[11px] text-gray-500">Opens Meet and posts the link here</span>
+                </button>
+                <button role="menuitem" onClick={() => { setMeetMenu(false); setScheduling(true); }} className="w-full text-left px-3 py-2 hover:bg-gray-800">
+                  <span className="block text-gray-100">Schedule Google Meet…</span>
+                  <span className="block text-[11px] text-gray-500">Adds it to Google Calendar and can invite everyone</span>
+                </button>
+                {!dmPeer && (
+                  <button role="menuitem" onClick={() => { setMeetMenu(false); openAgentMeetingTab(); }} className="w-full text-left px-3 py-2 hover:bg-gray-800 border-t border-gray-800">
+                    <span className="block text-gray-100">Agent meeting</span>
+                    <span className="block text-[11px] text-gray-500">In-app video call with the Brand Agent</span>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
@@ -354,6 +412,7 @@ export default function ChannelView({ channel, initialMessages, members, current
         onCancelEdit={() => setEditing(null)}
         placeholder={dmPeer ? `Message ${dmPeer.name || dmPeer.email}` : `Message #${channel.name}`}
       />
+      {scheduling && <ScheduleMeetDialog onClose={() => setScheduling(false)} onSchedule={(opts) => { setScheduling(false); startMeet(opts); }} defaultTitle={dmPeer ? '' : `#${channel.name} meeting`} />}
       {threadFor && (
         <ThreadPanel
           channelId={channel.id}
@@ -370,6 +429,38 @@ export default function ChannelView({ channel, initialMessages, members, current
         defaultDomain={channel.vnoc_domain || channel.tenant_domain}
         channelId={channel.id}
       />
+    </div>
+  );
+}
+
+function ScheduleMeetDialog({ onClose, onSchedule, defaultTitle }) {
+  const pad = (n) => String(n).padStart(2, '0');
+  const soon = new Date(Date.now() + 60 * 60000);
+  soon.setMinutes(0, 0, 0);
+  const local = `${soon.getFullYear()}-${pad(soon.getMonth() + 1)}-${pad(soon.getDate())}T${pad(soon.getHours())}:${pad(soon.getMinutes())}`;
+  const [title, setTitle] = useState(defaultTitle);
+  const [when, setWhen] = useState(local);
+  const [duration, setDuration] = useState(30);
+  const [invite, setInvite] = useState(true);
+  const input = 'w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-base sm:text-sm focus:outline-none focus:border-[#1a73e8]';
+  return (
+    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/60" onMouseDown={onClose}>
+      <div onMouseDown={(e) => e.stopPropagation()} className="w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl bg-gray-900 border border-gray-800 p-5 space-y-3" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 20px)' }}>
+        <h2 className="font-semibold">Schedule Google Meet</h2>
+        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title" className={input} />
+        <input type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} className={input} />
+        <select value={duration} onChange={(e) => setDuration(Number(e.target.value))} className={input}>
+          {[15, 30, 45, 60, 90, 120].map((m) => <option key={m} value={m}>{m} minutes</option>)}
+        </select>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={invite} onChange={(e) => setInvite(e.target.checked)} className="w-4 h-4 accent-[#1a73e8]" />
+          Send Google Calendar invites to everyone here
+        </label>
+        <div className="flex gap-2 pt-1">
+          <button onClick={() => onSchedule({ title, start: new Date(when).toISOString(), durationMinutes: duration, invite })} disabled={!when} className="flex-1 py-2 rounded-lg bg-[#1a73e8] hover:bg-[#1765cc] text-sm font-medium text-white disabled:opacity-40">Schedule</button>
+          <button onClick={onClose} className="px-4 py-2 rounded-lg bg-gray-800 text-sm">Cancel</button>
+        </div>
+      </div>
     </div>
   );
 }

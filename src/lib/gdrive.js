@@ -3,14 +3,18 @@ import { queryOne, query, insert } from './db.js';
 const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const DRIVE_API = 'https://www.googleapis.com/drive/v3';
-const SCOPES = 'https://www.googleapis.com/auth/drive.readonly';
+export const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.readonly';
+// Create calendar events with a Google Meet link (Start/Schedule Google Meet).
+export const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
 
-export function getGoogleAuthUrl(state) {
+// `scopes` are added to whatever the person already granted (include_granted_scopes).
+export function getGoogleAuthUrl(state, scopes = [DRIVE_SCOPE]) {
   const params = new URLSearchParams({
     client_id: process.env.GOOGLE_CLIENT_ID,
     redirect_uri: `${process.env.NEXT_PUBLIC_APP_URL}/api/gdrive/callback`,
     response_type: 'code',
-    scope: SCOPES,
+    scope: scopes.join(' '),
+    include_granted_scopes: 'true',
     access_type: 'offline',
     prompt: 'consent',
     state,
@@ -109,4 +113,16 @@ export async function listFiles(accessToken, { folderId, query: q, pageSize = 20
   if (pageToken) params.pageToken = pageToken;
 
   return driveRequest(accessToken, '/files', params);
+}
+
+/** A usable access token for the user plus whether they've granted `scope`; null if not connected. */
+export async function getTokenWithScope(userId, scope) {
+  const row = await queryOne('SELECT scope FROM user_google_tokens WHERE user_id = ?', [userId]);
+  if (!row) return null;
+  const accessToken = await getValidToken(userId);
+  if (!accessToken) return null;
+  // Refreshes can return a narrower scope string; re-read what's stored after refresh.
+  const fresh = await queryOne('SELECT scope FROM user_google_tokens WHERE user_id = ?', [userId]);
+  const granted = `${fresh?.scope || ''} ${row.scope || ''}`;
+  return { accessToken, hasScope: granted.split(/\s+/).includes(scope) };
 }

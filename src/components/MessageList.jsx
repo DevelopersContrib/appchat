@@ -217,7 +217,7 @@ export default function MessageList({ messages, currentUser, hasEarlier, loading
                     ↪ <span className="text-gray-300">{replyTo.author}</span> {replyTo.excerpt}
                   </p>
                 )}
-                {meta.card ? <VnocCard card={meta.card} /> : !(msg.body === 'Shared attachment' && msg.attachments?.length) && (
+                {meta.card?.kind === 'meet' ? <MeetCard card={meta.card} /> : meta.card ? <VnocCard card={meta.card} /> : !(msg.body === 'Shared attachment' && msg.attachments?.length) && (
                   <MessageBody text={msg.body} myNames={myNames} />
                 )}
                 {msg.edited_at && <span className="text-[10px] text-gray-600">(edited)</span>}
@@ -312,6 +312,21 @@ function SheetItem({ children, onClick, danger }) {
     <button onClick={onClick} className={`w-full text-left px-4 py-3 rounded-xl bg-gray-800/60 text-sm ${danger ? 'text-red-400' : 'text-gray-100'}`}>
       {children}
     </button>
+  );
+}
+
+function MeetCard({ card }) {
+  const when = card.start ? new Date(card.start) : null;
+  return (
+    <div className="mt-1 max-w-md rounded-xl border border-[#1a73e8]/40 bg-[#1a73e8]/10 px-3 py-2.5">
+      <p className="text-[10px] uppercase tracking-wide text-[#8ab4f8]">Google Meet · {card.scheduled && when ? when.toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'now'}</p>
+      <p className="text-sm font-medium text-gray-100">{card.title}</p>
+      {card.invited > 0 && <p className="text-xs text-gray-400">Calendar invites sent to {card.invited}</p>}
+      <div className="mt-2 flex gap-2">
+        <a href={card.url} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 rounded-lg bg-[#1a73e8] hover:bg-[#1765cc] text-xs font-medium text-white">Join Google Meet</a>
+        {card.eventUrl && <a href={card.eventUrl} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 rounded-lg bg-gray-800 text-xs text-gray-200">Calendar</a>}
+      </div>
+    </div>
   );
 }
 
