@@ -107,6 +107,12 @@ export default function Sidebar({ tenant, channels, dms: initialDms = [], user, 
           )}
         </p>
 
+        {['owner', 'admin'].includes(role) && (
+          <Link href={`/${currentSlug}/import/discord`} className="block px-3 pb-1 text-[11px] text-gray-500 hover:text-[#8b93ff]">
+            Import from Discord
+          </Link>
+        )}
+
         {showNewChannel && (
           <form onSubmit={createChannel} className="px-2 mb-2">
             <input

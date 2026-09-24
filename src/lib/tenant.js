@@ -44,3 +44,13 @@ export async function resolveTenant(request) {
 
   return null;
 }
+
+// Workspace owners/admins, plus platform admins, may manage a workspace (imports, settings).
+export async function requireTenantAdmin(tenantSlug, user) {
+  const tenant = await getTenantBySlug(tenantSlug);
+  if (!tenant) throw new Error('Workspace not found');
+  if (user.is_admin) return { tenant_id: tenant.id, slug: tenant.slug, role: 'admin' };
+  const m = await requireMembership(tenantSlug, user.id);
+  if (!['owner', 'admin'].includes(m.role)) throw new Error('Admins only');
+  return m;
+}
