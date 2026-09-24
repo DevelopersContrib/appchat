@@ -18,6 +18,11 @@ ALTER TABLE channel_members
   ADD COLUMN last_emailed_at DATETIME DEFAULT NULL,
   ADD COLUMN hidden_at DATETIME DEFAULT NULL;
 
+-- A workspace can be served on its own domain (e.g. team.vnoc.com), set in Workspace settings → Domain.
+ALTER TABLE tenants
+  ADD COLUMN custom_domain VARCHAR(255) DEFAULT NULL,
+  ADD UNIQUE KEY idx_custom_domain (custom_domain);
+
 -- Archived channels disappear from sidebars but keep their history.
 ALTER TABLE channels
   ADD COLUMN archived_at DATETIME DEFAULT NULL;

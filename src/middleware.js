@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
-import { tenantSlugForHost } from './lib/hosts.js';
+import { tenantSlugForHost, isPlatformHost } from './lib/hosts.js';
 
 const PUBLIC_PATHS = ['/', '/login', '/about', '/contact', '/privacy', '/terms', '/api/auth', '/api/rooms/public', '/api/cron'];
 const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET);
@@ -12,11 +12,35 @@ const PUBLIC_FILES = ['/manifest.webmanifest', '/sw.js', '/offline.html', '/icon
 const isFile = (pathname) =>
   PUBLIC_FILES.includes(pathname) || pathname.startsWith('/pwa/') || pathname.startsWith('/.well-known/');
 
+// host -> { slug, at }. Per edge instance; entries refresh after a minute so domain changes apply quickly.
+const hostCache = new Map();
+const HOST_CACHE_MS = 60000;
+
+async function lookupHostTenant(request, host) {
+  const fromEnv = tenantSlugForHost(host);
+  if (fromEnv || isPlatformHost(host)) return fromEnv;
+  const hit = hostCache.get(host);
+  if (hit && Date.now() - hit.at < HOST_CACHE_MS) return hit.slug;
+  try {
+    const url = new URL('/api/hosts/resolve', request.nextUrl.origin);
+    url.searchParams.set('host', host);
+    const res = await fetch(url, { cache: 'no-store' });
+    const { slug } = res.ok ? await res.json() : { slug: null };
+    hostCache.set(host, { slug: slug || null, at: Date.now() });
+    return slug || null;
+  } catch {
+    return null;
+  }
+}
+
 export async function middleware(request) {
   const { pathname } = request.nextUrl;
   const host = (request.headers.get('host') || '').split(':')[0].toLowerCase();
 
-  const hostTenant = tenantSlugForHost(host);
+  // The lookup endpoint itself must never be routed through a workspace.
+  if (pathname === '/api/hosts/resolve') return NextResponse.next();
+
+  const hostTenant = await lookupHostTenant(request, host);
   if (hostTenant) {
     return handleTenantHost(request, hostTenant);
   }

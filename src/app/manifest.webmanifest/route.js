@@ -1,11 +1,11 @@
 import { headers } from 'next/headers';
 import { getTenantBySlug } from '@/lib/tenant.js';
-import { tenantSlugForHost } from '@/lib/hosts.js';
+import { resolveTenantSlugForHost } from '@/lib/tenant-host.js';
 
 // Installable app manifest. White-label workspace hosts (TENANT_HOSTS) install as their own branded app.
 export async function GET() {
   const host = (await headers()).get('host') || '';
-  const slug = tenantSlugForHost(host);
+  const slug = await resolveTenantSlugForHost(host);
   const tenant = slug ? await getTenantBySlug(slug).catch(() => null) : null;
 
   const manifest = {

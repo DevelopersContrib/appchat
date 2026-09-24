@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 
 const TABS = [
   ['general', 'General'],
+  ['domain', 'Domain'],
   ['members', 'Members & roles'],
   ['rules', 'Rules'],
   ['moderation', 'Moderation'],
@@ -80,6 +81,7 @@ export default function WorkspaceSettings({ tenantSlug, initialTab, channels, my
         <div className="max-w-2xl p-4 md:p-6 space-y-6">
           {!settings && !status && <p className="text-sm text-gray-500">Loading…</p>}
           {settings && tab === 'general' && <General settings={settings} onSave={saveSettings} status={status} />}
+          {tab === 'domain' && <Domain base={base} tenantSlug={tenantSlug} />}
           {tab === 'members' && <Members base={base} myId={myId} />}
           {settings && tab === 'rules' && <Rules settings={settings} onSave={saveSettings} status={status} />}
           {settings && tab === 'moderation' && <Moderation base={base} settings={settings} onSave={saveSettings} status={status} />}
@@ -337,6 +339,89 @@ function Email({ base, settings, onSave, status, channels }) {
         <p className="text-gray-200 font-medium">Email into a channel — coming next</p>
         <p>Each channel will get its own address; forwarded emails will post into the channel.</p>
       </div>
+    </section>
+  );
+}
+
+function Domain({ base, tenantSlug }) {
+  const [info, setInfo] = useState(null);
+  const [domain, setDomain] = useState('');
+  const [status, setStatus] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback((check) => api(`${base}/domain${check ? '?check=1' : ''}`).then((d) => { setInfo(d); setDomain(d.domain || ''); }).catch((e) => setStatus({ error: e.message })), [base]);
+  useEffect(() => { load(); }, [load]);
+
+  async function act(fn, ok) {
+    setBusy(true);
+    setStatus(null);
+    try {
+      const d = await fn();
+      if (d) setInfo(d);
+      setStatus(ok ? { ok } : null);
+    } catch (err) {
+      setStatus({ error: err.message });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const save = () => act(() => api(`${base}/domain`, json('PUT', { domain })), 'Domain saved. Add the DNS record below.');
+  const check = () => act(() => api(`${base}/domain?check=1`), null);
+  const remove = () => window.confirm(`Stop using ${info.domain}?`) && act(async () => { await api(`${base}/domain`, { method: 'DELETE' }); setDomain(''); return { domain: null, automatic: info.automatic }; }, 'Domain removed');
+
+  if (!info) return <p className="text-sm text-gray-500">Loading…</p>;
+  return (
+    <section className="space-y-5">
+      <div className="space-y-1">
+        <p className="text-sm text-gray-300">
+          Give this workspace its own address, like <span className="text-white">team.vnoc.com</span>. People who open it land straight in this workspace, and it installs on phones as its own app.
+        </p>
+        <p className="text-xs text-gray-500">It will always also work at www.appchat.com/{tenantSlug}.</p>
+      </div>
+      <div className="flex gap-2">
+        <input value={domain} onChange={(e) => setDomain(e.target.value)} placeholder="team.example.com" className={input} />
+        <button onClick={save} disabled={busy || !domain.trim() || domain.trim() === info.domain} className={primary}>{info.domain ? 'Change' : 'Add'}</button>
+      </div>
+      <Status status={status} />
+
+      {info.domain && (
+        <div className="rounded-xl border border-gray-800 p-4 space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium">{info.domain}</p>
+              <p className={`text-xs ${info.live ? 'text-[#00b894]' : 'text-[#fdcb6e]'}`}>
+                {!info.automatic ? 'Saved — waiting for an AppChat admin to connect it' : info.live ? 'Live' : info.verified ? 'Waiting for DNS' : 'Waiting for verification'}
+              </p>
+            </div>
+            <div className="flex gap-2">
+              {info.automatic && !info.live && <button onClick={check} disabled={busy} className="px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-xs">Check again</button>}
+              {info.live && <a href={`https://${info.domain}`} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 rounded-lg bg-[#00b894] text-xs text-white">Open</a>}
+              <button onClick={remove} disabled={busy} className="px-3 py-1.5 rounded-lg text-xs text-red-400 hover:bg-red-500/10">Remove</button>
+            </div>
+          </div>
+          {info.records?.length > 0 && !info.live && (
+            <div className="space-y-2">
+              <p className="text-xs text-gray-400">Add {info.records.length === 1 ? 'this record' : 'these records'} where the domain's DNS is managed (for vnoc.com that's Cloudflare — set the proxy to “DNS only”):</p>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead className="text-gray-500"><tr><th className="text-left py-1 pr-3">Type</th><th className="text-left py-1 pr-3">Name</th><th className="text-left py-1">Value</th></tr></thead>
+                  <tbody className="font-mono">
+                    {info.records.map((r, i) => (
+                      <tr key={i} className="border-t border-gray-800">
+                        <td className="py-1.5 pr-3">{r.type}</td>
+                        <td className="py-1.5 pr-3">{r.name}</td>
+                        <td className="py-1.5 break-all">{r.value}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-xs text-gray-500">DNS changes usually take a few minutes. HTTPS is set up automatically once the record is in place.</p>
+            </div>
+          )}
+        </div>
+      )}
     </section>
   );
 }
