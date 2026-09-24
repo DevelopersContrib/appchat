@@ -1,7 +1,10 @@
 'use client';
 
-import { useState, useRef, forwardRef, useImperativeHandle } from 'react';
+import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
 import DrivePicker from './DrivePicker.jsx';
+import { useRoster } from './presence.jsx';
+
+const TYPING_PING_MS = 3000;
 
 function putWithProgress(url, file, contentType, onProgress) {
   return new Promise((resolve, reject) => {
@@ -16,8 +19,15 @@ function putWithProgress(url, file, contentType, onProgress) {
 }
 
 // Exposes addFiles() so the channel view can hand over dropped files.
-const MessageInput = forwardRef(function MessageInput({ onSend, channelId }, ref) {
+// replyTo / editing: banners above the box; onSend(body, attachments) handles both (edit = PATCH in the parent).
+const MessageInput = forwardRef(function MessageInput(
+  { onSend, channelId, replyTo, onCancelReply, editing, onCancelEdit, placeholder, compact },
+  ref
+) {
   const [body, setBody] = useState('');
+  const [mention, setMention] = useState(null); // { query, start, index }
+  const lastTypingPing = useRef(0);
+  const roster = useRoster();
   const [sending, setSending] = useState(false);
   const [showDrive, setShowDrive] = useState(false);
   const [showLink, setShowLink] = useState(false);
@@ -28,7 +38,53 @@ const MessageInput = forwardRef(function MessageInput({ onSend, channelId }, ref
   const fileRef = useRef(null);
   const uploading = pendingAttachments.some((a) => a.uploading);
 
-  useImperativeHandle(ref, () => ({ addFiles: uploadFiles }));
+  useImperativeHandle(ref, () => ({ addFiles: uploadFiles, focus: () => inputRef.current?.focus() }));
+
+  // Editing loads the message text into the box.
+  useEffect(() => {
+    if (editing) {
+      setBody(editing.body || '');
+      setTimeout(() => inputRef.current?.focus(), 0);
+    }
+  }, [editing]);
+
+  useEffect(() => {
+    if (replyTo) inputRef.current?.focus();
+  }, [replyTo]);
+
+  const mentionOptions = mention
+    ? (roster?.members || [])
+        .filter((m) => !mention.query || m.name.toLowerCase().includes(mention.query) || m.email.toLowerCase().startsWith(mention.query))
+        .slice(0, 6)
+    : [];
+
+  function handleChange(e) {
+    const value = e.target.value;
+    setBody(value);
+    // "@ana" right before the caret opens the mention list.
+    const caret = e.target.selectionStart ?? value.length;
+    const m = /(^|\s)@([\p{L}\p{N}_.-]*)$/u.exec(value.slice(0, caret));
+    setMention(m ? { query: m[2].toLowerCase(), start: caret - m[2].length - 1, index: 0 } : null);
+    // Let others see "typing…" (throttled).
+    if (value.trim() && Date.now() - lastTypingPing.current > TYPING_PING_MS && channelId && !editing) {
+      lastTypingPing.current = Date.now();
+      fetch(`/api/channels/${channelId}/typing`, { method: 'POST' }).catch(() => {});
+    }
+  }
+
+  function pickMention(member) {
+    const el = inputRef.current;
+    const caret = el?.selectionStart ?? body.length;
+    const insert = `@${member.name} `;
+    const next = body.slice(0, mention.start) + insert + body.slice(caret);
+    setBody(next);
+    setMention(null);
+    setTimeout(() => {
+      el?.focus();
+      const pos = mention.start + insert.length;
+      el?.setSelectionRange(pos, pos);
+    }, 0);
+  }
 
   function updateAttachment(localId, patch) {
     setPendingAttachments((prev) => prev.map((a) => (a.localId === localId ? { ...a, ...patch } : a)));
@@ -84,7 +140,9 @@ const MessageInput = forwardRef(function MessageInput({ onSend, channelId }, ref
     if ((!body.trim() && !ready.length) || sending || uploading) return;
 
     setSending(true);
+    setMention(null);
     await onSend(body, ready.length ? ready : undefined);
+    lastTypingPing.current = 0;
     setBody('');
     setPendingAttachments([]);
     setSending(false);
@@ -92,6 +150,28 @@ const MessageInput = forwardRef(function MessageInput({ onSend, channelId }, ref
   }
 
   function handleKeyDown(e) {
+    if (mention && mentionOptions.length) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        const d = e.key === 'ArrowDown' ? 1 : -1;
+        setMention((m) => ({ ...m, index: (m.index + d + mentionOptions.length) % mentionOptions.length }));
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        pickMention(mentionOptions[mention.index] || mentionOptions[0]);
+        return;
+      }
+      if (e.key === 'Escape') {
+        setMention(null);
+        return;
+      }
+    }
+    if (e.key === 'Escape') {
+      if (editing) { setBody(''); onCancelEdit?.(); }
+      else if (replyTo) onCancelReply?.();
+      return;
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSubmit(e);
@@ -138,7 +218,38 @@ const MessageInput = forwardRef(function MessageInput({ onSend, channelId }, ref
     <>
       {showDrive && <DrivePicker onSelect={handleDriveSelect} onClose={() => setShowDrive(false)} />}
 
-      <form onSubmit={handleSubmit} className="px-3 md:px-5 py-3 border-t border-gray-800">
+      <form onSubmit={handleSubmit} className={`relative ${compact ? 'px-3' : 'px-3 md:px-5'} py-3 border-t border-gray-800`}>
+        {mention && mentionOptions.length > 0 && (
+          <ul className="absolute left-3 right-3 md:left-5 md:right-auto md:w-80 bottom-full mb-1 z-30 rounded-xl border border-gray-700 bg-gray-900 shadow-2xl py-1" role="listbox">
+            {mentionOptions.map((m, i) => (
+              <li key={m.id}>
+                <button
+                  type="button"
+                  onMouseDown={(e) => { e.preventDefault(); pickMention(m); }}
+                  className={`w-full flex items-center gap-2 px-3 py-1.5 text-left text-sm ${i === mention.index ? 'bg-gray-800' : 'hover:bg-gray-800/60'}`}
+                >
+                  <span className={`w-2 h-2 rounded-full ${m.status === 'active' ? 'bg-[#00b894]' : m.status === 'away' ? 'bg-[#fdcb6e]' : 'bg-gray-600'}`} />
+                  <span className="truncate">{m.name}</span>
+                  <span className="ml-auto text-xs text-gray-500 truncate">{m.email}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {(replyTo || editing) && (
+          <div className="flex items-center gap-2 mb-2 px-3 py-1.5 rounded-lg bg-gray-800/70 border-l-2 border-[#8b93ff] text-xs">
+            <span className="text-gray-400 shrink-0">{editing ? 'Editing message' : `Replying to ${replyTo.author_name || replyTo.author_email || 'message'}`}</span>
+            {!editing && <span className="truncate text-gray-500">{replyTo.body}</span>}
+            <button
+              type="button"
+              onClick={() => { if (editing) { setBody(''); onCancelEdit?.(); } else onCancelReply?.(); }}
+              className="ml-auto text-gray-500 hover:text-white"
+              aria-label="Cancel"
+            >
+              ×
+            </button>
+          </div>
+        )}
         {showLink && (
           <div className="mb-3 p-3 rounded-xl border border-gray-700 bg-gray-900/70">
             <p className="text-xs text-gray-400 mb-2">Share URL / presentation link</p>
@@ -237,10 +348,10 @@ const MessageInput = forwardRef(function MessageInput({ onSend, channelId }, ref
           <textarea
             ref={inputRef}
             value={body}
-            onChange={(e) => setBody(e.target.value)}
+            onChange={handleChange}
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
-            placeholder="Message, link, or paste an image..."
+            placeholder={editing ? 'Edit your message' : placeholder || 'Message, @mention, link, or paste an image…'}
             rows={1}
             className="flex-1 bg-transparent resize-none text-base md:text-sm focus:outline-none placeholder:text-gray-500 max-h-32"
             style={{ minHeight: '24px' }}

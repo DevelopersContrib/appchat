@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth.js';
 import { queryOne, query } from '@/lib/db.js';
 import ChannelView from '@/components/ChannelView.jsx';
+import { MESSAGE_SELECT, hydrateMessages } from '@/lib/messages.js';
 
 export default async function ChannelPage({ params }) {
   const { tenant: slug, channelId } = await params;
@@ -23,16 +24,15 @@ export default async function ChannelPage({ params }) {
   );
   if (!isMember) redirect(`/${slug}`);
 
-  // Latest 100, oldest first. Imported history can make channels far longer than one page.
-  const messages = (await query(
-    `SELECT m.*, u.name as author_name, u.email as author_email, u.avatar_url as author_avatar
-     FROM messages m
-     LEFT JOIN users u ON u.id = m.user_id
-     WHERE m.channel_id = ? AND m.deleted_at IS NULL
-     ORDER BY m.created_at DESC, m.id DESC
-     LIMIT 100`,
-    [channelId]
-  )).reverse();
+  // Latest 100 top-level messages, oldest first (thread replies live in the thread panel).
+  const messages = await hydrateMessages(
+    (await query(
+      `${MESSAGE_SELECT} WHERE m.channel_id = ? AND m.deleted_at IS NULL AND m.thread_id IS NULL
+       ORDER BY m.created_at DESC, m.id DESC LIMIT 100`,
+      [channelId]
+    )).reverse(),
+    user.id
+  );
 
   const members = await query(
     `SELECT u.id, u.name, u.email, u.avatar_url, u.last_seen_at

@@ -1,7 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import LinkPreview from './LinkPreview.jsx';
+
+export const QUICK_REACTIONS = ['👍', '❤️', '😂', '🎉', '👀', '✅'];
+export const MORE_REACTIONS = ['🔥', '🙏', '💯', '😮', '😢', '😡', '🚀', '👏', '🤔', '💡', '⚡', '🙌', '😍', '😅', '👌', '❌', '⭐', '☕'];
 
 function formatTime(dateStr) {
   const d = new Date(dateStr);
@@ -19,7 +22,7 @@ function formatDate(dateStr) {
 }
 
 function Avatar({ name, url }) {
-  if (url) return <img src={url} alt="" className="w-9 h-9 rounded-full" />;
+  if (url) return <img src={url} alt="" className="w-9 h-9 rounded-full object-cover" />;
   const initial = (name || '?')[0].toUpperCase();
   const colors = ['bg-blue-600', 'bg-emerald-600', 'bg-purple-600', 'bg-orange-600', 'bg-pink-600'];
   const color = colors[initial.charCodeAt(0) % colors.length];
@@ -30,7 +33,7 @@ function Avatar({ name, url }) {
   );
 }
 
-function parseMetadata(metadata) {
+export function parseMetadata(metadata) {
   if (!metadata) return {};
   if (typeof metadata === 'object') return metadata;
   try {
@@ -40,15 +43,70 @@ function parseMetadata(metadata) {
   }
 }
 
-export default function MessageList({ messages, currentUser, hasEarlier, loadingEarlier, onLoadEarlier, canModerate, onDelete }) {
+// Bold any "@word" so mentions stand out; the viewer's own mentions are highlighted.
+function MessageBody({ text, myNames }) {
+  const parts = String(text).split(/(@[\p{L}\p{N}_.-]+)/u);
+  return (
+    <p className="text-sm text-gray-300 break-words whitespace-pre-wrap">
+      {parts.map((p, i) => {
+        if (!p.startsWith('@') || p.length < 2) return p;
+        const mine = myNames.some((n) => p.slice(1).toLowerCase() === n);
+        return (
+          <span key={i} className={`font-semibold rounded px-0.5 ${mine ? 'bg-[#fdcb6e]/20 text-[#fdcb6e]' : 'text-[#8b93ff]'}`}>{p}</span>
+        );
+      })}
+    </p>
+  );
+}
+
+/**
+ * actions: { onReact(msg, emoji), onReply(msg), onThread(msg), onEdit(msg), onDelete(msg) } — each optional.
+ * inThread: rendering inside the thread panel (no thread buttons/counts, no auto-load-earlier).
+ */
+export default function MessageList({ messages, currentUser, hasEarlier, loadingEarlier, onLoadEarlier, canModerate, actions = {}, inThread = false }) {
   const endRef = useRef(null);
   const newestId = messages[messages.length - 1]?.id;
   const metas = useMemo(() => messages.map((m) => parseMetadata(m.metadata)), [messages]);
+  const [pickerFor, setPickerFor] = useState(null);
+  const [sheetFor, setSheetFor] = useState(null);
+  const pressTimer = useRef(null);
+  const myNames = useMemo(() => {
+    const n = [currentUser?.name, currentUser?.name?.split(' ')[0], currentUser?.email?.split('@')[0], 'channel', 'here', 'everyone'];
+    return n.filter(Boolean).map((x) => x.toLowerCase());
+  }, [currentUser]);
 
   // Follow new messages at the bottom, but stay put when older history is loaded above.
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [newestId]);
+
+  useEffect(() => {
+    if (!pickerFor) return;
+    const close = () => setPickerFor(null);
+    window.addEventListener('click', close);
+    return () => window.removeEventListener('click', close);
+  }, [pickerFor]);
+
+  const canAct = (msg) => !String(msg.id).startsWith('temp-') && msg.type !== 'system' && !msg.deleted;
+  const isMine = (msg) => msg.user_id === currentUser?.id;
+
+  function ActionBar({ msg }) {
+    const mine = isMine(msg);
+    return (
+      <div className="absolute right-2 -top-3 z-10 hidden md:group-hover:flex items-center gap-0.5 rounded-lg border border-gray-700 bg-gray-900 px-1 py-0.5 shadow-lg">
+        {actions.onReact && QUICK_REACTIONS.slice(0, 4).map((e) => (
+          <button key={e} onClick={() => actions.onReact(msg, e)} className="px-1 text-base hover:scale-125 transition" title={`React ${e}`}>{e}</button>
+        ))}
+        {actions.onReact && (
+          <button onClick={(ev) => { ev.stopPropagation(); setPickerFor(msg.id); }} className="px-1.5 text-sm text-gray-400 hover:text-white" title="More reactions">＋</button>
+        )}
+        {actions.onReply && <IconButton label="Reply" onClick={() => actions.onReply(msg)}>↩</IconButton>}
+        {!inThread && actions.onThread && <IconButton label="Reply in thread" onClick={() => actions.onThread(msg)}>🧵</IconButton>}
+        {mine && actions.onEdit && msg.type === 'text' && <IconButton label="Edit" onClick={() => actions.onEdit(msg)}>✎</IconButton>}
+        {(mine || canModerate) && actions.onDelete && <IconButton label={mine ? 'Delete' : 'Delete as moderator'} danger onClick={() => actions.onDelete(msg)}>🗑</IconButton>}
+      </div>
+    );
+  }
 
   let lastDate = null;
 
@@ -66,7 +124,7 @@ export default function MessageList({ messages, currentUser, hasEarlier, loading
         </div>
       )}
       {messages.map((msg, i) => {
-        const renderKey = `${String(msg.id ?? 'msg')}-${msg.created_at ?? 'time'}-${i}`;
+        const renderKey = `${String(msg.id ?? 'msg')}-${i}`;
         const msgDate = formatDate(msg.created_at);
         const showDate = msgDate !== lastDate;
         lastDate = msgDate;
@@ -75,19 +133,18 @@ export default function MessageList({ messages, currentUser, hasEarlier, loading
         const meta = metas[i];
         // Imported (e.g. Discord) messages have no user_id; group them by their original author instead.
         const importedAuthor = !msg.user_id ? meta.author : null;
-        const sameAuthor = prevMsg && authorKey(prevMsg, metas[i - 1]) === authorKey(msg, meta) && !showDate;
-        const timeDiff = prevMsg
-          ? new Date(msg.created_at) - new Date(prevMsg.created_at)
-          : Infinity;
-        const isCurrentUser = msg.user_id === currentUser?.id;
+        const sameAuthor = prevMsg && prevMsg.type !== 'system' && authorKey(prevMsg, metas[i - 1]) === authorKey(msg, meta) && !showDate;
+        const timeDiff = prevMsg ? new Date(msg.created_at) - new Date(prevMsg.created_at) : Infinity;
+        const isCurrentUser = isMine(msg);
         const resolvedName = isCurrentUser
           ? (currentUser?.name || msg.author_name || currentUser?.email || msg.author_email)
           : (msg.author_name || msg.author_email || importedAuthor?.name);
         const resolvedAvatar = isCurrentUser
           ? (currentUser?.avatar_url || msg.author_avatar)
           : (msg.author_avatar || importedAuthor?.avatar);
-        // Keep sender identity visible for your own new messages.
-        const compact = !isCurrentUser && sameAuthor && timeDiff < 300000;
+        const replyTo = msg.replyTo || meta.replyTo;
+        const compact = !isCurrentUser && sameAuthor && timeDiff < 300000 && !replyTo;
+        const mentionsMe = !isCurrentUser && (meta.mentionsEveryone || (meta.mentions || []).includes(currentUser?.id));
 
         if (msg.type === 'system') {
           return (
@@ -100,9 +157,7 @@ export default function MessageList({ messages, currentUser, hasEarlier, loading
 
         if (msg.type === 'ai') {
           const brandDomain = meta.brandDomain;
-          const brandLogo = meta.brandLogo;
-          const faviconUrl = brandDomain ? `https://www.brandidentity.com/favicon/${brandDomain}` : null;
-          const avatarSrc = brandLogo || faviconUrl;
+          const avatarSrc = meta.brandLogo || (brandDomain ? `https://www.brandidentity.com/favicon/${brandDomain}` : null);
           return (
             <div key={renderKey}>
               {showDate && <DateDivider date={msgDate} />}
@@ -111,9 +166,7 @@ export default function MessageList({ messages, currentUser, hasEarlier, loading
                   {avatarSrc ? (
                     <img src={avatarSrc} alt="Brand" className="w-6 h-6 rounded-full bg-gray-900 border border-[#fdcb6e]/20 object-contain p-0.5" />
                   ) : (
-                    <div className="w-6 h-6 rounded-full bg-[#fdcb6e] text-gray-950 text-[10px] font-bold flex items-center justify-center">
-                      AI
-                    </div>
+                    <div className="w-6 h-6 rounded-full bg-[#fdcb6e] text-gray-950 text-[10px] font-bold flex items-center justify-center">AI</div>
                   )}
                   <span className="text-xs font-semibold text-[#fdcb6e]">Brand Agent</span>
                   <span className="text-[10px] text-gray-500">{formatTime(msg.created_at)}</span>
@@ -127,21 +180,19 @@ export default function MessageList({ messages, currentUser, hasEarlier, loading
         return (
           <div key={renderKey}>
             {showDate && <DateDivider date={msgDate} />}
-            <div className={`group relative flex gap-3 hover:bg-gray-800/50 rounded px-2 ${compact ? 'py-0.5' : 'py-2 mt-2'}`}>
-              {onDelete && (isCurrentUser || canModerate) && !String(msg.id).startsWith('temp-') && (
-                <button
-                  onClick={() => onDelete(msg)}
-                  className="absolute right-2 top-1 hidden group-hover:block group-focus-within:block px-2 py-0.5 rounded-md border border-gray-700 bg-gray-900 text-[11px] text-gray-400 hover:text-red-400"
-                  title={isCurrentUser ? 'Delete message' : 'Delete as moderator'}
-                >
-                  Delete
-                </button>
+            <div
+              className={`group relative flex gap-3 rounded px-2 ${compact ? 'py-0.5' : 'py-2 mt-2'} ${mentionsMe ? 'bg-[#fdcb6e]/5 border-l-2 border-[#fdcb6e]/60' : 'hover:bg-gray-800/50'}`}
+              onTouchStart={() => { if (canAct(msg)) pressTimer.current = setTimeout(() => setSheetFor(msg), 450); }}
+              onTouchEnd={() => clearTimeout(pressTimer.current)}
+              onTouchMove={() => clearTimeout(pressTimer.current)}
+            >
+              {canAct(msg) && <ActionBar msg={msg} />}
+              {pickerFor === msg.id && (
+                <EmojiPicker onPick={(e) => { actions.onReact(msg, e); setPickerFor(null); }} className="absolute right-2 top-6 z-20" />
               )}
               {compact ? (
                 <div className="w-9 flex-shrink-0">
-                  <span className="text-[10px] text-gray-600 opacity-0 group-hover:opacity-100">
-                    {formatTime(msg.created_at)}
-                  </span>
+                  <span className="text-[10px] text-gray-600 opacity-0 group-hover:opacity-100">{formatTime(msg.created_at)}</span>
                 </div>
               ) : (
                 <Avatar name={resolvedName} url={resolvedAvatar} />
@@ -149,36 +200,112 @@ export default function MessageList({ messages, currentUser, hasEarlier, loading
               <div className="min-w-0 flex-1">
                 {!compact && (
                   <div className="flex items-baseline gap-2">
-                    <span className="font-semibold text-sm">
-                      {resolvedName || 'Unknown'}
-                    </span>
-                    {meta.source === 'discord' && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/15 text-indigo-300">Discord</span>
-                    )}
+                    <span className="font-semibold text-sm">{resolvedName || 'Unknown'}</span>
+                    {meta.source === 'discord' && <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/15 text-indigo-300">Discord</span>}
+                    {meta.source === 'slack' && <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#4A154B]/40 text-pink-200">Slack</span>}
                     <span className="text-xs text-gray-500">{formatTime(msg.created_at)}</span>
                   </div>
                 )}
-                {meta.replyTo && (
-                  <p className="text-xs text-gray-500 truncate border-l-2 border-gray-700 pl-2 my-0.5">
-                    ↪ <span className="text-gray-400">{meta.replyTo.author}</span> {meta.replyTo.excerpt}
+                {replyTo && (
+                  <p className="text-xs text-gray-500 truncate border-l-2 border-gray-600 pl-2 my-0.5">
+                    ↪ <span className="text-gray-300">{replyTo.author}</span> {replyTo.excerpt}
                   </p>
                 )}
                 {meta.card ? <VnocCard card={meta.card} /> : !(msg.body === 'Shared attachment' && msg.attachments?.length) && (
-                  <p className="text-sm text-gray-300 break-words whitespace-pre-wrap">{msg.body}</p>
+                  <MessageBody text={msg.body} myNames={myNames} />
                 )}
+                {msg.edited_at && <span className="text-[10px] text-gray-600">(edited)</span>}
                 {msg.attachments?.map((att, attIndex) => (
-                  <LinkPreview
-                    key={`${String(att.id ?? 'att')}-${att.url ?? ''}-${attIndex}`}
-                    attachment={att}
-                  />
+                  <LinkPreview key={`${String(att.id ?? 'att')}-${att.url ?? ''}-${attIndex}`} attachment={att} />
                 ))}
+                {msg.reactions?.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {msg.reactions.map((r) => (
+                      <button
+                        key={r.emoji}
+                        onClick={() => actions.onReact?.(msg, r.emoji)}
+                        title={r.names?.join(', ')}
+                        className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-xs ${r.mine ? 'border-[#00b894]/60 bg-[#00b894]/15 text-white' : 'border-gray-700 bg-gray-800/60 text-gray-300 hover:border-gray-500'}`}
+                      >
+                        <span>{r.emoji}</span>
+                        <span>{r.count}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {!inThread && msg.reply_count > 0 && (
+                  <button onClick={() => actions.onThread?.(msg)} className="mt-1 text-xs font-medium text-[#8b93ff] hover:underline">
+                    {msg.reply_count} {msg.reply_count === 1 ? 'reply' : 'replies'}
+                    {msg.last_reply_at && <span className="text-gray-500 font-normal"> · last {formatTime(msg.last_reply_at)}</span>}
+                  </button>
+                )}
               </div>
             </div>
           </div>
         );
       })}
       <div ref={endRef} />
+
+      {sheetFor && (
+        <MobileActionSheet
+          msg={sheetFor}
+          mine={isMine(sheetFor)}
+          canModerate={canModerate}
+          inThread={inThread}
+          actions={actions}
+          onClose={() => setSheetFor(null)}
+        />
+      )}
     </div>
+  );
+}
+
+function IconButton({ label, onClick, danger, children }) {
+  return (
+    <button onClick={onClick} title={label} aria-label={label} className={`px-1.5 text-sm ${danger ? 'text-gray-400 hover:text-red-400' : 'text-gray-400 hover:text-white'}`}>
+      {children}
+    </button>
+  );
+}
+
+export function EmojiPicker({ onPick, className = '' }) {
+  return (
+    <div onClick={(e) => e.stopPropagation()} className={`grid grid-cols-8 gap-0.5 p-2 rounded-xl border border-gray-700 bg-gray-900 shadow-2xl ${className}`}>
+      {[...QUICK_REACTIONS, ...MORE_REACTIONS].map((e) => (
+        <button key={e} onClick={() => onPick(e)} className="w-8 h-8 rounded hover:bg-gray-800 text-lg">{e}</button>
+      ))}
+    </div>
+  );
+}
+
+// Press-and-hold menu on phones.
+function MobileActionSheet({ msg, mine, canModerate, inThread, actions, onClose }) {
+  const run = (fn) => { onClose(); fn(msg); };
+  return (
+    <div className="fixed inset-0 z-[70] bg-black/50 flex items-end md:hidden" onClick={onClose}>
+      <div className="w-full rounded-t-2xl bg-gray-900 border-t border-gray-800 p-3 space-y-2" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 12px)' }} onClick={(e) => e.stopPropagation()}>
+        {actions.onReact && (
+          <div className="flex justify-between px-1">
+            {QUICK_REACTIONS.map((e) => (
+              <button key={e} onClick={() => { onClose(); actions.onReact(msg, e); }} className="w-11 h-11 rounded-full bg-gray-800 text-xl">{e}</button>
+            ))}
+          </div>
+        )}
+        {actions.onReply && <SheetItem onClick={() => run(actions.onReply)}>Reply</SheetItem>}
+        {!inThread && actions.onThread && <SheetItem onClick={() => run(actions.onThread)}>Reply in thread</SheetItem>}
+        {mine && actions.onEdit && msg.type === 'text' && <SheetItem onClick={() => run(actions.onEdit)}>Edit message</SheetItem>}
+        {msg.body && <SheetItem onClick={() => { onClose(); navigator.clipboard?.writeText(msg.body); }}>Copy text</SheetItem>}
+        {(mine || canModerate) && actions.onDelete && <SheetItem danger onClick={() => run(actions.onDelete)}>Delete message</SheetItem>}
+      </div>
+    </div>
+  );
+}
+
+function SheetItem({ children, onClick, danger }) {
+  return (
+    <button onClick={onClick} className={`w-full text-left px-4 py-3 rounded-xl bg-gray-800/60 text-sm ${danger ? 'text-red-400' : 'text-gray-100'}`}>
+      {children}
+    </button>
   );
 }
 

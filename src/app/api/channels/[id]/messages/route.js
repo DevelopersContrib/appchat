@@ -5,16 +5,27 @@ import { unfurlUrl } from '@/lib/unfurl.js';
 import { rateLimit, getClientIp, sanitizeString, sanitizeUrl } from '@/lib/security.js';
 import { parseChannelFromKey, fileUrlForKey } from '@/lib/storage.js';
 import { assertCanPost, applyWordFilter } from '@/lib/workspace.js';
-import { notifyOfflineDmRecipients } from '@/lib/notify.js';
+import { notifyOfflineDmRecipients, notifyMentions } from '@/lib/notify.js';
+import { MESSAGE_SELECT, hydrateMessages, findMentions } from '@/lib/messages.js';
+import { pushToChannelRecipients } from '@/lib/push.js';
 import { buildBrandAgentReply } from '@/lib/brand-agent.js';
 import { generateClaudeAgentReply } from '@/lib/claude-agent.js';
 import { parseTenantSettings, resolveToneProfile } from '@/lib/brand-agent-profiles.js';
 
+const TYPING_WINDOW_MS = 6000;
+
+/**
+ * Channel timeline (thread replies excluded — they're in the thread panel).
+ *   ?before=<id>            older page
+ *   ?thread=<id>            a thread: the parent plus all replies
+ *   ?after=<id>&since=<ms>  live sync: { messages (new), changed (edited/deleted/reactions/reply counts), typing, now }
+ *   (none)                  latest 100
+ */
 export async function GET(request, { params }) {
   try {
     const user = await requireSession();
     const { id: channelId } = await params;
-    const after = request.nextUrl.searchParams.get('after');
+    const sp = request.nextUrl.searchParams;
 
     const isMember = await queryOne(
       'SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?',
@@ -22,53 +33,70 @@ export async function GET(request, { params }) {
     );
     if (!isMember) return NextResponse.json({ error: 'Not a member' }, { status: 403 });
 
-    let sql = `SELECT m.*, u.name as author_name, u.email as author_email, u.avatar_url as author_avatar
-               FROM messages m LEFT JOIN users u ON u.id = m.user_id
-               WHERE m.channel_id = ? AND m.deleted_at IS NULL`;
-    const params2 = [channelId];
+    const threadId = sp.get('thread');
+    if (threadId) {
+      const rows = await query(
+        `${MESSAGE_SELECT} WHERE m.channel_id = ? AND (m.id = ? OR m.thread_id = ?) AND m.deleted_at IS NULL
+         ORDER BY m.created_at ASC, m.id ASC LIMIT 500`,
+        [channelId, threadId, threadId]
+      );
+      return NextResponse.json(await hydrateMessages(rows, user.id));
+    }
 
-    const before = request.nextUrl.searchParams.get('before');
-
-    let messages;
+    const before = sp.get('before');
     if (before) {
       const cursor = await queryOne('SELECT created_at, id FROM messages WHERE id = ? AND channel_id = ?', [before, channelId]);
       if (!cursor) return NextResponse.json([]);
-      sql += ` AND (m.created_at < ? OR (m.created_at = ? AND m.id < ?))
-               ORDER BY m.created_at DESC, m.id DESC LIMIT 100`;
-      params2.push(cursor.created_at, cursor.created_at, cursor.id);
-      messages = (await query(sql, params2)).reverse();
-    } else if (after) {
-      // Only live messages: skip back-dated rows (e.g. a Discord import running now) that are older than the cursor.
-      sql += ` AND m.id > ?
-               AND m.created_at >= COALESCE((SELECT created_at FROM messages WHERE id = ? AND channel_id = ?), '1970-01-01')
-               ORDER BY m.id ASC LIMIT 100`;
-      params2.push(after, after, channelId);
-      messages = await query(sql, params2);
-    } else {
-      sql += ' ORDER BY m.created_at DESC, m.id DESC LIMIT 100';
-      messages = (await query(sql, params2)).reverse();
-    }
-
-    if (messages.length) {
-      const msgIds = messages.map(m => m.id);
-      const allAttachments = await query(
-        `SELECT * FROM message_attachments WHERE message_id IN (${msgIds.map(() => '?').join(',')})`,
-        msgIds
+      const rows = await query(
+        `${MESSAGE_SELECT} WHERE m.channel_id = ? AND m.deleted_at IS NULL AND m.thread_id IS NULL
+           AND (m.created_at < ? OR (m.created_at = ? AND m.id < ?))
+         ORDER BY m.created_at DESC, m.id DESC LIMIT 100`,
+        [channelId, cursor.created_at, cursor.created_at, cursor.id]
       );
-      const attachMap = {};
-      allAttachments.forEach(a => {
-        if (!attachMap[a.message_id]) attachMap[a.message_id] = [];
-        attachMap[a.message_id].push(a);
-      });
-      messages.forEach(m => { m.attachments = attachMap[m.id] || []; });
+      return NextResponse.json(await hydrateMessages(rows.reverse(), user.id));
     }
 
-    await query(
-      'UPDATE channel_members SET last_read_at = NOW() WHERE channel_id = ? AND user_id = ?',
-      [channelId, user.id]
-    );
+    const after = sp.get('after');
+    if (after) {
+      const [{ now }] = await query('SELECT NOW(3) AS now');
+      const since = sp.get('since') ? new Date(Number(sp.get('since'))) : null;
+      // New top-level messages. Skip back-dated rows (e.g. an import running now) older than the cursor.
+      const fresh = await query(
+        `${MESSAGE_SELECT} WHERE m.channel_id = ? AND m.id > ? AND m.deleted_at IS NULL AND m.thread_id IS NULL
+           AND m.created_at >= COALESCE((SELECT created_at FROM messages WHERE id = ? AND channel_id = ?), '1970-01-01')
+         ORDER BY m.id ASC LIMIT 100`,
+        [channelId, after, after, channelId]
+      );
+      // Already-loaded messages that changed: edits, deletes, reactions, new thread replies.
+      const changed = since
+        ? await query(
+            `${MESSAGE_SELECT} WHERE m.channel_id = ? AND m.id <= ? AND m.thread_id IS NULL AND m.updated_at > ?
+             ORDER BY m.id ASC LIMIT 200`,
+            [channelId, after, since]
+          )
+        : [];
+      const typing = await query(
+        `SELECT COALESCE(NULLIF(u.name, ''), SUBSTRING_INDEX(u.email, '@', 1)) AS name
+         FROM user_presence p JOIN users u ON u.id = p.user_id
+         WHERE p.typing_channel_id = ? AND p.typing_at > NOW(3) - INTERVAL ${TYPING_WINDOW_MS / 1000} SECOND AND p.user_id <> ?`,
+        [channelId, user.id]
+      );
+      await query('UPDATE channel_members SET last_read_at = NOW() WHERE channel_id = ? AND user_id = ?', [channelId, user.id]);
+      return NextResponse.json({
+        messages: await hydrateMessages(fresh, user.id),
+        changed: await hydrateMessages(changed, user.id),
+        typing: typing.map((t) => t.name),
+        now: new Date(now).getTime(),
+      });
+    }
 
-    return NextResponse.json(messages);
+    const rows = await query(
+      `${MESSAGE_SELECT} WHERE m.channel_id = ? AND m.deleted_at IS NULL AND m.thread_id IS NULL
+       ORDER BY m.created_at DESC, m.id DESC LIMIT 100`,
+      [channelId]
+    );
+    await query('UPDATE channel_members SET last_read_at = NOW() WHERE channel_id = ? AND user_id = ?', [channelId, user.id]);
+    return NextResponse.json(await hydrateMessages(rows.reverse(), user.id));
   } catch (err) {
     return NextResponse.json({ error: err.message }, { status: 401 });
   }
@@ -85,7 +113,6 @@ export async function POST(request, { params }) {
 
     const raw = await request.json();
     const body = sanitizeString(raw.body, 10000);
-    const threadId = raw.threadId;
     const attachments = Array.isArray(raw.attachments) ? raw.attachments : [];
 
     if (!body && attachments.length === 0) {
@@ -106,10 +133,35 @@ export async function POST(request, { params }) {
       return NextResponse.json({ error: err.message }, { status: err.status || 403 });
     }
     const normalizedBody = applyWordFilter(body?.trim(), workspaceSettings.bannedWords) || (attachments.length ? 'Shared attachment' : '');
-    const msgId = await insert(
-      'INSERT INTO messages (channel_id, user_id, body, thread_id) VALUES (?, ?, ?, ?)',
-      [channelId, user.id, normalizedBody, threadId || null]
+
+    // Thread reply (goes to the thread panel) and/or quote-reply; both must point into this channel.
+    let threadId = null;
+    if (raw.threadId) {
+      const parent = await queryOne('SELECT id, thread_id FROM messages WHERE id = ? AND channel_id = ? AND deleted_at IS NULL', [raw.threadId, channelId]);
+      if (!parent) return NextResponse.json({ error: 'That thread no longer exists' }, { status: 404 });
+      threadId = parent.thread_id || parent.id;
+    }
+    let replyToId = null;
+    if (raw.replyToId) {
+      const target = await queryOne('SELECT id FROM messages WHERE id = ? AND channel_id = ?', [raw.replyToId, channelId]);
+      replyToId = target?.id || null;
+    }
+
+    // @mentions of people in this channel (plus @channel/@here).
+    const channelMembers = await query(
+      `SELECT u.id, NULLIF(u.name, '') AS name, u.email FROM channel_members cm JOIN users u ON u.id = cm.user_id WHERE cm.channel_id = ?`,
+      [channelId]
     );
+    const mentions = findMentions(normalizedBody, channelMembers);
+    const metadata = mentions.userIds.length || mentions.everyone ? JSON.stringify({ mentions: mentions.userIds, mentionsEveryone: mentions.everyone }) : null;
+
+    const msgId = await insert(
+      'INSERT INTO messages (channel_id, user_id, body, thread_id, reply_to_id, metadata) VALUES (?, ?, ?, ?, ?, ?)',
+      [channelId, user.id, normalizedBody, threadId, replyToId, metadata]
+    );
+    // Bump the thread parent so open chats refresh its reply count; clear "typing…".
+    if (threadId) await query('UPDATE messages SET updated_at = NOW(3) WHERE id = ?', [threadId]);
+    await query('UPDATE user_presence SET typing_channel_id = NULL WHERE user_id = ?', [user.id]);
 
     if (attachments.length) {
       for (const att of attachments.slice(0, 10)) {
@@ -145,19 +197,11 @@ export async function POST(request, { params }) {
       }
     }
 
-    const message = await queryOne(
-      `SELECT m.*, u.name as author_name, u.email as author_email, u.avatar_url as author_avatar
-       FROM messages m LEFT JOIN users u ON u.id = m.user_id WHERE m.id = ?`,
-      [msgId]
-    );
+    const [message] = await hydrateMessages(await query(`${MESSAGE_SELECT} WHERE m.id = ?`, [msgId]), user.id);
 
-    const msgAttachments = await query(
-      'SELECT * FROM message_attachments WHERE message_id = ?', [msgId]
-    );
-    message.attachments = msgAttachments;
-
+    // The Brand Agent only answers in the main channel, not in threads.
     const hasMeaningfulText = Boolean(body && body.trim() && body.trim().toLowerCase() !== 'shared attachment');
-    if (hasMeaningfulText) {
+    if (hasMeaningfulText && !threadId) {
       const activeRoom = await queryOne(
         `SELECT r.id, r.livekit_room, t.domain as brand_domain, t.slug as tenant_slug, t.settings as tenant_settings
          FROM rooms r
@@ -258,10 +302,17 @@ export async function POST(request, { params }) {
       }
     }
 
-    // DMs to someone who's offline also go to their email (throttled), after the response is sent.
-    if (workspaceSettings.emailOfflineDms !== false) {
-      after(() => notifyOfflineDmRecipients({ channelId: Number(channelId), sender: user, body: normalizedBody }).catch((err) => console.error('[notify]', err)));
-    }
+    // Notifications run after the response is sent:
+    //  - push to phones/desktops for DMs and @mentions
+    //  - email offline people about DMs (throttled) and @mentions
+    after(async () => {
+      const ctx = { channelId: Number(channelId), messageId: msgId, sender: user, body: normalizedBody, mentions };
+      await pushToChannelRecipients(ctx).catch((err) => console.error('[push]', err));
+      if (workspaceSettings.emailOfflineDms !== false) {
+        await notifyOfflineDmRecipients(ctx).catch((err) => console.error('[notify]', err));
+      }
+      if (mentions.userIds.length) await notifyMentions(ctx).catch((err) => console.error('[notify]', err));
+    });
 
     return NextResponse.json(message, { status: 201 });
   } catch (err) {

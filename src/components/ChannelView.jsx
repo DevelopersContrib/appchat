@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import MessageList from './MessageList.jsx';
 import MessageInput from './MessageInput.jsx';
 import SprintPanel from './SprintPanel.jsx';
+import ThreadPanel from './ThreadPanel.jsx';
 import { useRoster, PresenceDot, describePresence } from './presence.jsx';
 
 function mergeUniqueMessages(existing, incoming) {
@@ -39,6 +40,12 @@ export default function ChannelView({ channel, initialMessages, members, current
   const messagesRef = useRef(messages);
   const [hasEarlier, setHasEarlier] = useState((initialMessages || []).length >= 100);
   const [loadingEarlier, setLoadingEarlier] = useState(false);
+  const [replyTo, setReplyTo] = useState(null);
+  const [editing, setEditing] = useState(null);
+  const [threadFor, setThreadFor] = useState(null);
+  const [typing, setTyping] = useState([]);
+  // Server clock of the last sync, so the next one only returns what changed since.
+  const sinceRef = useRef(null);
 
   async function loadEarlier() {
     const oldest = messagesRef.current.find((m) => !String(m.id).startsWith('temp-'));
@@ -60,18 +67,48 @@ export default function ChannelView({ channel, initialMessages, members, current
     messagesRef.current = messages;
   }, [messages]);
 
+  // Live sync: new messages, plus edits/deletes/reactions/thread counts since the last sync, plus who's typing.
   const pollMessages = useCallback(async () => {
     const current = messagesRef.current || [];
     const lastId = current.reduce((max, msg) => Math.max(max, Number(msg.id) || 0), 0);
     try {
-      const res = await fetch(`/api/channels/${channel.id}/messages?after=${lastId}`);
+      const since = sinceRef.current ? `&since=${sinceRef.current}` : '';
+      const res = await fetch(`/api/channels/${channel.id}/messages?after=${lastId}${since}`);
       if (!res.ok) return;
-      const newMsgs = await res.json();
-      if (newMsgs.length > 0) {
-        setMessages(prev => mergeUniqueMessages(prev, newMsgs));
+      const { messages: fresh = [], changed = [], typing: typingNow = [], now } = await res.json();
+      sinceRef.current = now;
+      setTyping(typingNow);
+      if (fresh.length || changed.length) {
+        setMessages((prev) => {
+          const removed = new Set(changed.filter((m) => m.deleted).map((m) => m.id));
+          const loaded = new Set(prev.map((m) => m.id));
+          const updates = changed.filter((m) => !m.deleted && loaded.has(m.id));
+          return mergeUniqueMessages(prev.filter((m) => !removed.has(m.id)), [...fresh, ...updates]);
+        });
       }
     } catch {}
   }, [channel.id]);
+
+  const upsert = (msg) => setMessages((prev) => mergeUniqueMessages(prev, [msg]));
+
+  async function handleReact(msg, emoji) {
+    const res = await fetch(`/api/channels/${channel.id}/messages/${msg.id}/reactions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ emoji }),
+    });
+    if (res.ok) upsert(await res.json());
+  }
+
+  function handleEdit(msg) {
+    setReplyTo(null);
+    setEditing(msg);
+  }
+
+  function handleReply(msg) {
+    setEditing(null);
+    setReplyTo(msg);
+  }
 
   useEffect(() => {
     pollMessages();
@@ -117,12 +154,29 @@ export default function ChannelView({ channel, initialMessages, members, current
     const own = msg.user_id === currentUser?.id;
     if (!window.confirm(own ? 'Delete this message?' : 'Delete this message as a moderator? This is logged.')) return;
     const res = await fetch(`/api/channels/${channel.id}/messages/${msg.id}`, { method: 'DELETE' });
-    if (res.ok) setMessages((prev) => prev.filter((m) => m.id !== msg.id));
+    if (res.ok) {
+      setMessages((prev) => prev.filter((m) => m.id !== msg.id));
+      if (threadFor === msg.id) setThreadFor(null);
+    }
     else setCommandError((await res.json().catch(() => ({}))).error || 'Could not delete the message');
   }
 
   async function handleSend(body, attachments) {
+    if (editing) {
+      const res = await fetch(`/api/channels/${channel.id}/messages/${editing.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ body }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) upsert(data);
+      else setCommandError(data.error || 'Could not save the edit');
+      setEditing(null);
+      return;
+    }
     if (!attachments?.length && body?.trim().startsWith('/') && (await runCommand(body))) return;
+    const quoting = replyTo;
+    setReplyTo(null);
 
     const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const optimisticMessage = {
@@ -136,6 +190,7 @@ export default function ChannelView({ channel, initialMessages, members, current
       author_email: currentUser?.email || '',
       author_avatar: currentUser?.avatar_url || null,
       attachments: attachments || [],
+      replyTo: quoting ? { id: quoting.id, author: quoting.author_name || quoting.author_email || '', excerpt: String(quoting.body || '').slice(0, 160) } : undefined,
     };
 
     setMessages((prev) => mergeUniqueMessages(prev, [optimisticMessage]));
@@ -143,7 +198,7 @@ export default function ChannelView({ channel, initialMessages, members, current
     const res = await fetch(`/api/channels/${channel.id}/messages`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ body, attachments }),
+      body: JSON.stringify({ body, attachments, replyToId: quoting?.id }),
     });
 
     if (res.ok) {
@@ -154,6 +209,7 @@ export default function ChannelView({ channel, initialMessages, members, current
       });
     } else {
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
+      setCommandError((await res.json().catch(() => ({}))).error || 'Message not sent');
     }
   }
 
@@ -269,12 +325,35 @@ export default function ChannelView({ channel, initialMessages, members, current
         loadingEarlier={loadingEarlier}
         onLoadEarlier={loadEarlier}
         canModerate={canModerate}
-        onDelete={handleDelete}
+        actions={{ onReact: handleReact, onReply: handleReply, onThread: (m) => setThreadFor(m.id), onEdit: handleEdit, onDelete: handleDelete }}
       />
+      <p className="px-5 h-4 text-[11px] text-gray-500" aria-live="polite">
+        {typing.length === 1 && `${typing[0]} is typing…`}
+        {typing.length === 2 && `${typing[0]} and ${typing[1]} are typing…`}
+        {typing.length > 2 && 'Several people are typing…'}
+      </p>
       {commandError && (
         <p className="px-5 pb-1 text-xs text-red-400">{commandError}</p>
       )}
-      <MessageInput ref={inputRef} onSend={handleSend} channelId={channel.id} />
+      <MessageInput
+        ref={inputRef}
+        onSend={handleSend}
+        channelId={channel.id}
+        replyTo={replyTo}
+        onCancelReply={() => setReplyTo(null)}
+        editing={editing}
+        onCancelEdit={() => setEditing(null)}
+        placeholder={dmPeer ? `Message ${dmPeer.name || dmPeer.email}` : `Message #${channel.name}`}
+      />
+      {threadFor && (
+        <ThreadPanel
+          channelId={channel.id}
+          parentId={threadFor}
+          currentUser={currentUser}
+          canModerate={canModerate}
+          onClose={() => { setThreadFor(null); pollMessages(); }}
+        />
+      )}
       <SprintPanel
         open={sprintPanel.open}
         initialQuery={sprintPanel.query}

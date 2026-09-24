@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import InstallAppButton from './InstallAppButton.jsx';
+import NotificationsButton from './NotificationsButton.jsx';
 import { NewChannelDialog, BrowseChannelsDialog, ChannelSettingsDialog } from './ChannelDialogs.jsx';
 import { usePresenceBeacon, publishRoster, PresenceDot } from './presence.jsx';
 
@@ -214,7 +215,8 @@ export default function Sidebar({ tenant, channels, dms: initialDms = [], user, 
       </nav>
 
       <div className="p-3 border-t border-gray-800">
-        <InstallAppButton className="mb-3" />
+        <InstallAppButton className="mb-2" />
+        <NotificationsButton className="mb-3" />
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-xs font-bold">
             {(user.name || user.email)[0].toUpperCase()}

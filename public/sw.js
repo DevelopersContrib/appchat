@@ -1,6 +1,6 @@
 // AppChat service worker: makes the app installable and keeps the shell usable on flaky mobile networks.
 // Chat data (/api) is never cached; messages always come from the server.
-const VERSION = 'appchat-v1';
+const VERSION = 'appchat-v2';
 const OFFLINE_URL = '/offline.html';
 
 self.addEventListener('install', (event) => {
@@ -40,4 +40,39 @@ self.addEventListener('fetch', (event) => {
       }))
     );
   }
+});
+
+// Push notifications (DMs and @mentions). Payload: { title, body, url, tag }.
+self.addEventListener('push', (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {}
+  event.waitUntil(
+    self.registration.showNotification(data.title || 'AppChat', {
+      body: data.body || '',
+      icon: '/pwa/icon-192.png',
+      badge: '/pwa/icon-192.png',
+      tag: data.tag, // one notification per conversation; newer replaces older
+      renotify: Boolean(data.tag),
+      data: { url: data.url || '/' },
+    })
+  );
+});
+
+// Tapping a notification focuses an open AppChat window on that conversation, or opens one.
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = event.notification.data?.url || '/';
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windows) => {
+      for (const w of windows) {
+        if (new URL(w.url).origin === new URL(url, self.location.origin).origin && 'focus' in w) {
+          w.navigate(url);
+          return w.focus();
+        }
+      }
+      return self.clients.openWindow(url);
+    })
+  );
 });
