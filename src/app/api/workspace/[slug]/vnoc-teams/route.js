@@ -36,18 +36,20 @@ export const GET = withWorkspaceAdmin(async (request, { user, tenant }) => {
 // Link a channel to a VNOC domain and add that domain's team to the workspace and the channel.
 export const POST = withWorkspaceAdmin(async (request, { user, tenant }) => {
   const b = await request.json().catch(() => ({}));
-  const channel = await queryOne(
-    'SELECT id, name, is_private FROM channels WHERE id = ? AND tenant_id = ? AND is_dm = 0',
-    [b.channelId, tenant.id]
-  );
-  if (!channel) return NextResponse.json({ error: 'Channel not found' }, { status: 404 });
+  // Optional: also link a channel to the domain and add the team to it.
+  const channel = b.channelId
+    ? await queryOne('SELECT id, name, is_private FROM channels WHERE id = ? AND tenant_id = ? AND is_dm = 0', [b.channelId, tenant.id])
+    : null;
+  if (b.channelId && !channel) return NextResponse.json({ error: 'Channel not found' }, { status: 404 });
 
   const access = await getVnocAccess(user);
   const domain = await resolveDomain(access, b.domain);
   if (!domain) return NextResponse.json({ error: "That VNOC domain wasn't found, or you don't have access to it" }, { status: 403 });
 
-  await query('UPDATE channels SET vnoc_domain = ? WHERE id = ?', [domain.domain_name, channel.id]);
-  const team = await getDomainTeam(domain.domain_id);
+  if (channel) await query('UPDATE channels SET vnoc_domain = ? WHERE id = ?', [domain.domain_name, channel.id]);
+  // Optionally only some of the team (emails picked in the preview).
+  const only = Array.isArray(b.emails) ? new Set(b.emails.map((e) => String(e).toLowerCase())) : null;
+  const team = (await getDomainTeam(domain.domain_id)).filter((p) => !only || only.has(p.email));
 
   const newToWorkspace = [];
   let addedToChannel = 0;
@@ -64,8 +66,10 @@ export const POST = withWorkspaceAdmin(async (request, { user, tenant }) => {
       );
       newToWorkspace.push({ email: person.email, name: person.name });
     }
-    const res = await query('INSERT IGNORE INTO channel_members (channel_id, user_id) VALUES (?, ?)', [channel.id, u.id]);
-    addedToChannel += res.affectedRows;
+    if (channel) {
+      const res = await query('INSERT IGNORE INTO channel_members (channel_id, user_id) VALUES (?, ?)', [channel.id, u.id]);
+      addedToChannel += res.affectedRows;
+    }
   }
 
   let emailed = 0;
@@ -76,21 +80,21 @@ export const POST = withWorkspaceAdmin(async (request, { user, tenant }) => {
       subject: `You've been added to ${tenant.name} on AppChat`,
       html: layout({
         title: `Join the ${domain.domain_name} team chat`,
-        bodyHtml: `<p>Hi ${escapeHtml(name)},</p><p>${escapeHtml(inviter)} added the <b>${escapeHtml(domain.domain_name)}</b> team to <b>#${escapeHtml(channel.name)}</b> in ${escapeHtml(tenant.name)} on AppChat.</p>
+        bodyHtml: `<p>Hi ${escapeHtml(name)},</p><p>${escapeHtml(inviter)} added the <b>${escapeHtml(domain.domain_name)}</b> team to ${channel ? `<b>#${escapeHtml(channel.name)}</b> in ` : ''}${escapeHtml(tenant.name)} on AppChat.</p>
           <p>Sign in with this email address (${escapeHtml(email)}) — no password needed.</p>`,
         cta: { label: 'Open AppChat', url: `${APP_URL}/login` },
       }),
     }));
   }
 
-  if (addedToChannel) {
+  if (channel && addedToChannel) {
     await insert('INSERT INTO messages (channel_id, body, type) VALUES (?, ?, ?)', [
       channel.id,
       `${user.name || user.email} added the ${domain.domain_name} team (${addedToChannel} ${addedToChannel === 1 ? 'person' : 'people'})`,
       'system',
     ]);
   }
-  await audit(tenant.id, user.id, 'vnoc.team_import', `#${channel.name} ← ${domain.domain_name}`, {
+  await audit(tenant.id, user.id, 'vnoc.team_import', `${channel ? `#${channel.name}` : 'workspace'} ← ${domain.domain_name}`, {
     team: team.length, addedToChannel, newToWorkspace: newToWorkspace.length, emailed,
   });
   return NextResponse.json({ domain: domain.domain_name, team: team.length, addedToChannel, newToWorkspace: newToWorkspace.length, emailed });

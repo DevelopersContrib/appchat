@@ -34,10 +34,12 @@ export default function Sidebar({ tenant, channels, dms: initialDms = [], user, 
     const timer = setInterval(loadRoster, ROSTER_POLL_MS);
     window.addEventListener('focus', loadRoster);
     window.addEventListener('appchat-dm-opened', loadRoster);
+    window.addEventListener('appchat-roster-refresh', loadRoster);
     return () => {
       clearInterval(timer);
       window.removeEventListener('focus', loadRoster);
       window.removeEventListener('appchat-dm-opened', loadRoster);
+      window.removeEventListener('appchat-roster-refresh', loadRoster);
     };
   }, [loadRoster]);
 

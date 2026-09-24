@@ -80,7 +80,7 @@ export default async function TenantLayout({ children, params }) {
           <main className="flex-1 flex flex-col min-w-0 min-h-0" style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}>
             {children}
           </main>
-          <MemberList currentSlug={slug} currentUserId={user.id} />
+          <MemberList currentSlug={slug} currentUserId={user.id} canInvite={['owner', 'admin'].includes(membership.role) || Boolean(user.is_admin)} />
         </div>
       </>
     );

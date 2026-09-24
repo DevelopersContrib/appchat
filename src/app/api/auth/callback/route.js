@@ -3,6 +3,7 @@ import { authenticateWithMagic } from '@/lib/auth.js';
 import { rateLimit, getClientIp } from '@/lib/security.js';
 import { resolveTenantSlugForHost } from '@/lib/tenant-host.js';
 import { syncContribProfile } from '@/lib/contrib.js';
+import { findInvite, acceptInvite, INVITE_COOKIE } from '@/lib/invites.js';
 
 export async function POST(request) {
   const ip = getClientIp(request);
@@ -16,11 +17,14 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 400 });
     }
 
-    const { user, token } = await authenticateWithMagic(didToken, { membersOnly: true });
+    // Arriving from an invite link lets someone new sign in; they're added to that workspace.
+    const invite = await findInvite(request.cookies.get(INVITE_COOKIE)?.value);
+    const { user, token } = await authenticateWithMagic(didToken, { membersOnly: !invite });
     // Pull name and photo from the person's contrib.com profile.
     await syncContribProfile(user);
 
-    const redirectTo = (await resolveTenantSlugForHost(request.headers.get('host'))) ? '/' : '/dashboard';
+    let redirectTo = (await resolveTenantSlugForHost(request.headers.get('host'))) ? '/' : '/dashboard';
+    if (invite) redirectTo = (await acceptInvite(invite, user.id)).url;
 
     const res = NextResponse.json({ user: { id: user.id, email: user.email }, redirectTo });
     res.cookies.set('appchat_session', token, {
@@ -30,6 +34,7 @@ export async function POST(request) {
       maxAge: 60 * 60 * 24 * 7,
       path: '/',
     });
+    if (invite) res.cookies.delete(INVITE_COOKIE);
 
     return res;
   } catch (err) {

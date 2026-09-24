@@ -3,16 +3,18 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useRoster, PresenceDot, describePresence, localTime } from './presence.jsx';
+import AddMembersDialog from './AddMembersDialog.jsx';
 
 // Discord-style member list on the right. Always visible on wide screens; a drawer
 // (toggled by the header's People button) on phones and tablets.
-export default function MemberList({ currentSlug, currentUserId }) {
+export default function MemberList({ currentSlug, currentUserId, canInvite }) {
   const roster = useRoster();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [opening, setOpening] = useState(null);
   const [filter, setFilter] = useState('');
   const [profile, setProfile] = useState(null);
+  const [adding, setAdding] = useState(false);
 
   useEffect(() => {
     const toggle = () => setOpen((o) => !o);
@@ -93,6 +95,11 @@ export default function MemberList({ currentSlug, currentUserId }) {
             placeholder="Find a member"
             className="flex-1 min-w-0 px-2.5 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-base lg:text-xs focus:outline-none focus:border-[#00b894]"
           />
+          {canInvite && (
+            <button onClick={() => setAdding(true)} className="shrink-0 px-2.5 py-1.5 rounded-lg bg-[#00b894] hover:bg-[#00a383] text-xs font-medium text-white" title="Add members">
+              + Add
+            </button>
+          )}
           <button onClick={() => setOpen(false)} className="lg:hidden text-gray-400 hover:text-white text-xl px-1" aria-label="Close">×</button>
         </div>
         <div className="flex-1 overflow-y-auto p-2">
@@ -111,6 +118,13 @@ export default function MemberList({ currentSlug, currentUserId }) {
           )}
         </div>
       </aside>
+      {adding && (
+        <AddMembersDialog
+          tenantSlug={currentSlug}
+          onClose={() => setAdding(false)}
+          onAdded={() => window.dispatchEvent(new Event('appchat-roster-refresh'))}
+        />
+      )}
       {profile && (
         <ProfileCard
           member={roster?.members?.find((x) => x.id === profile.id) || profile}

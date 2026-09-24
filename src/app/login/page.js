@@ -9,6 +9,11 @@ export default function LoginPage() {
   const [sdkReady, setSdkReady] = useState(false);
   const [error, setError] = useState('');
   const magicRef = useRef(null);
+  const [invited, setInvited] = useState(false);
+
+  useEffect(() => {
+    setInvited(new URLSearchParams(window.location.search).has('invite'));
+  }, []);
 
   useEffect(() => {
     const publishableKey = process.env.NEXT_PUBLIC_MAGIC_PUBLISHABLE_KEY;
@@ -59,7 +64,9 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <img src="https://www.brandidentity.com/logo/appchat.com" alt="AppChat" className="h-10 mx-auto" />
-          <p className="text-gray-400 mt-2 text-sm">Sign in with your email</p>
+          <p className="text-gray-400 mt-2 text-sm">
+            {invited ? 'Sign in with your email to join the workspace you were invited to' : 'Sign in with your email'}
+          </p>
         </div>
 
         <form onSubmit={handleLogin} className="space-y-4">

@@ -2,11 +2,11 @@ import { NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
 import { tenantSlugForHost, isPlatformHost } from './lib/hosts.js';
 
-const PUBLIC_PATHS = ['/', '/login', '/about', '/contact', '/privacy', '/terms', '/api/auth', '/api/rooms/public', '/api/cron'];
+const PUBLIC_PATHS = ['/', '/login', '/join', '/about', '/contact', '/privacy', '/terms', '/api/auth', '/api/rooms/public', '/api/cron'];
 const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET);
 
 // Paths that are shared app routes, not tenant pages; never prefix these with a tenant slug.
-const SHARED_PREFIXES = ['/api', '/login', '/room', '/_next', '/admin', '/dashboard', '/onboard', '/.well-known', '/pwa'];
+const SHARED_PREFIXES = ['/api', '/login', '/join', '/room', '/_next', '/admin', '/dashboard', '/onboard', '/.well-known', '/pwa'];
 // Static/PWA files (manifest, service worker, icons) must load without a session.
 const PUBLIC_FILES = ['/manifest.webmanifest', '/sw.js', '/offline.html', '/icon.svg', '/pwa-icon.svg', '/robots.txt'];
 const isFile = (pathname) =>
@@ -97,7 +97,7 @@ function isShared(pathname) {
 async function handleTenantHost(request, slug) {
   const { pathname } = request.nextUrl;
   // Private workspace host: everything needs a session; tenant membership is checked in [tenant]/layout.
-  const isPublic = pathname === '/login' || pathname.startsWith('/api/auth/') || isFile(pathname);
+  const isPublic = pathname === '/login' || pathname.startsWith('/join/') || pathname.startsWith('/api/auth/') || isFile(pathname);
 
   if (!isPublic) {
     const token = request.cookies.get('appchat_session')?.value;

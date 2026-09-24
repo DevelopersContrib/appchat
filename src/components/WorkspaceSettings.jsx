@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import AddMembersDialog from './AddMembersDialog.jsx';
 
 const TABS = [
   ['general', 'General'],
@@ -82,7 +83,7 @@ export default function WorkspaceSettings({ tenantSlug, initialTab, channels, my
           {!settings && !status && <p className="text-sm text-gray-500">Loading…</p>}
           {settings && tab === 'general' && <General settings={settings} onSave={saveSettings} status={status} />}
           {tab === 'domain' && <Domain base={base} tenantSlug={tenantSlug} />}
-          {tab === 'members' && <Members base={base} myId={myId} />}
+          {tab === 'members' && <Members base={base} myId={myId} tenantSlug={tenantSlug} />}
           {settings && tab === 'rules' && <Rules settings={settings} onSave={saveSettings} status={status} />}
           {settings && tab === 'moderation' && <Moderation base={base} settings={settings} onSave={saveSettings} status={status} />}
           {tab === 'tools' && <Tools tenantSlug={tenantSlug} />}
@@ -115,11 +116,9 @@ function General({ settings, onSave, status }) {
   );
 }
 
-function Members({ base, myId }) {
+function Members({ base, myId, tenantSlug }) {
   const [members, setMembers] = useState(null);
-  const [emails, setEmails] = useState('');
-  const [role, setRole] = useState('member');
-  const [note, setNote] = useState('');
+  const [adding, setAdding] = useState(false);
   const [status, setStatus] = useState(null);
   const load = useCallback(() => api(`${base}/members`).then((d) => setMembers(d.members)).catch((e) => setStatus({ error: e.message })), [base]);
   useEffect(() => { load(); }, [load]);
@@ -135,29 +134,16 @@ function Members({ base, myId }) {
     }
   }
 
-  const invite = () =>
-    run(() => api(`${base}/members`, json('POST', { emails, role, message: note })), (d) => {
-      setEmails('');
-      setNote('');
-      return `Added ${d.added}, emailed ${d.emailed}${d.alreadyMembers ? `, ${d.alreadyMembers} already in` : ''}${d.invalid ? `, ${d.invalid} invalid` : ''}.`;
-    });
-
   return (
     <section className="space-y-6">
-      <div className="space-y-3 rounded-xl border border-gray-800 p-4">
-        <h2 className="text-sm font-semibold">Invite people</h2>
-        <textarea value={emails} onChange={(e) => setEmails(e.target.value)} rows={2} placeholder="Emails, separated by commas or new lines" className={input} />
-        <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Personal note (optional)" className={input} />
-        <div className="flex gap-2">
-          <select value={role} onChange={(e) => setRole(e.target.value)} className="px-2 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm">
-            <option value="member">Member</option>
-            <option value="admin">Admin</option>
-            <option value="guest">Guest</option>
-          </select>
-          <button onClick={invite} disabled={!emails.trim()} className={primary}>Send invites</button>
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-800 p-4">
+        <div>
+          <h2 className="text-sm font-semibold">Add members</h2>
+          <p className="text-xs text-gray-400">Invite by email, share a join link, or bring in a VNOC website’s team.</p>
         </div>
-        <p className="text-xs text-gray-500">They get an email and can sign in right away with that address.</p>
+        <button onClick={() => setAdding(true)} className={primary}>Add members</button>
       </div>
+      {adding && <AddMembersDialog tenantSlug={tenantSlug} onClose={() => { setAdding(false); load(); }} onAdded={load} />}
       <Status status={status} />
       <ul className="rounded-xl border border-gray-800 divide-y divide-gray-800">
         {!members && <li className="p-3 text-sm text-gray-500">Loading…</li>}
