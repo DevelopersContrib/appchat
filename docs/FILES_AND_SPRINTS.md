@@ -12,20 +12,9 @@ then redirects to a 5-minute signed link. Limit: `MAX_UPLOAD_MB` (default 25).
 
 Env (same names as vnoc/manage-app): `AWS_S3_BUCKET_DOMAIN`, `AWS_S3_REGION`, `AWS_S3_ACCESS_KEY_ID`, `AWS_S3_SECRET_ACCESS_KEY`.
 
-**Bucket CORS** (applied to `vnoc-domain-files` on 2026-09-24 as rule `appchat-direct-uploads`): browsers can only upload
-directly if the bucket allows the page's origin. To add a new domain, update the rule's `AllowedOrigins`:
-
-```json
-[
-  {
-    "AllowedOrigins": ["https://appchat.com", "https://*.appchat.com", "https://team.vnoc.com", "http://localhost:3000"],
-    "AllowedMethods": ["PUT", "GET", "HEAD"],
-    "AllowedHeaders": ["Content-Type"],
-    "ExposeHeaders": ["ETag"],
-    "MaxAgeSeconds": 3000
-  }
-]
-```
+**Bucket CORS** (rule `appchat-direct-uploads` on `vnoc-domain-files`): allows `PUT`/`GET`/`HEAD` from any origin, so
+workspaces on their own domains can upload. This is safe because every upload needs a short-lived signed URL
+that AppChat only issues to channel members; files are private and downloads go through `/api/files`.
 
 Run the migration once: `node --env-file=.env.local migrations/run.js 007_file_uploads.sql`
 
