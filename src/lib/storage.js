@@ -82,3 +82,23 @@ export async function createDownloadUrl(key, { filename, contentType } = {}) {
 export function fileUrlForKey(key) {
   return `/api/files/${key}`;
 }
+
+// Import files (e.g. a Slack export .zip) uploaded by workspace admins: <domain>/appchat/imports/<tenant>/<id>.zip
+export function importKeyPrefix(domain, tenantId) {
+  return `${domain}/appchat/imports/${tenantId}/`;
+}
+
+export async function createImportUploadUrl({ domain, tenantId, size }) {
+  const key = `${importKeyPrefix(domain, tenantId)}${nanoid(16)}.zip`;
+  const uploadUrl = await getSignedUrl(
+    s3(),
+    new PutObjectCommand({ Bucket: BUCKET, Key: key, ContentType: 'application/zip', ContentLength: size }),
+    { expiresIn: 1800 }
+  );
+  return { key, uploadUrl };
+}
+
+export async function getObjectBytes(key) {
+  const res = await s3().send(new GetObjectCommand({ Bucket: BUCKET, Key: key }));
+  return new Uint8Array(await res.Body.transformToByteArray());
+}

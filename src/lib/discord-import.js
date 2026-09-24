@@ -3,6 +3,8 @@
 // for one channel and reports whether that channel is finished. Re-running resumes after the last
 // imported message (tracked by messages.source/external_id).
 
+import { ensureImportedChannel, insertImportedMessages, toMysqlDate } from './import-common.js';
+
 const API = 'https://discord.com/api/v10';
 export const SOURCE = 'discord';
 const TEXT_CHANNEL_TYPES = new Set([0, 5]); // text, announcement
@@ -51,37 +53,8 @@ export async function loadGuild(guildId, token) {
   };
 }
 
-/** Finds or creates the AppChat channel for a Discord channel and adds every workspace member. */
-export async function ensureChannel(db, tenantId, dc) {
-  const [[linked]] = await db.query(
-    'SELECT id FROM channels WHERE tenant_id = ? AND source = ? AND external_id = ?',
-    [tenantId, SOURCE, dc.id]
-  );
-  let channelId = linked?.id;
-
-  if (!channelId) {
-    const [[byName]] = await db.query(
-      'SELECT id FROM channels WHERE tenant_id = ? AND name = ? AND source IS NULL AND is_dm = 0 LIMIT 1',
-      [tenantId, dc.name]
-    );
-    if (byName) {
-      channelId = byName.id;
-      await db.query('UPDATE channels SET source = ?, external_id = ? WHERE id = ?', [SOURCE, dc.id, channelId]);
-    } else {
-      const [res] = await db.query(
-        'INSERT INTO channels (tenant_id, name, description, source, external_id) VALUES (?, ?, ?, ?, ?)',
-        [tenantId, dc.name, (dc.topic || '').slice(0, 500), SOURCE, dc.id]
-      );
-      channelId = res.insertId;
-    }
-  }
-
-  await db.query(
-    `INSERT IGNORE INTO channel_members (channel_id, user_id)
-     SELECT ?, user_id FROM tenant_members WHERE tenant_id = ?`,
-    [channelId, tenantId]
-  );
-  return channelId;
+export function ensureChannel(db, tenantId, dc) {
+  return ensureImportedChannel(db, { tenantId, source: SOURCE, externalId: dc.id, name: dc.name, topic: dc.topic });
 }
 
 export async function lastImportedId(db, channelId) {
@@ -166,36 +139,8 @@ function toRow(msg, guild, userMap, emailToUserId) {
   };
 }
 
-async function insertPage(db, channelId, rows) {
-  await db.beginTransaction();
-  try {
-    const [inserted] = await db.query(
-      `INSERT IGNORE INTO messages (channel_id, user_id, body, type, metadata, source, external_id, created_at, edited_at)
-       VALUES ?`,
-      [rows.map((r) => [channelId, r.userId, r.body, 'text', JSON.stringify(r.metadata), SOURCE, r.externalId, r.createdAt, r.editedAt])]
-    );
-
-    const withFiles = rows.filter((r) => r.attachments.length);
-    if (withFiles.length) {
-      const [ids] = await db.query(
-        'SELECT id, external_id FROM messages WHERE channel_id = ? AND source = ? AND external_id IN (?)',
-        [channelId, SOURCE, withFiles.map((r) => r.externalId)]
-      );
-      const idByExternal = new Map(ids.map((r) => [r.external_id, r.id]));
-      const attachmentRows = withFiles.flatMap((r) =>
-        r.attachments.map((a) => [idByExternal.get(r.externalId), 'file', a.title.slice(0, 500), a.url, a.mimeType, a.size])
-      );
-      await db.query(
-        'INSERT INTO message_attachments (message_id, type, title, url, mime_type, size_bytes) VALUES ?',
-        [attachmentRows]
-      );
-    }
-    await db.commit();
-    return inserted.affectedRows;
-  } catch (err) {
-    await db.rollback();
-    throw err;
-  }
+function insertPage(db, channelId, rows) {
+  return insertImportedMessages(db, channelId, SOURCE, rows);
 }
 
 // Turn Discord markup (<@id>, <#id>, <:emoji:id>, <t:unix>) into plain readable text.
@@ -209,9 +154,7 @@ function formatContent(text, msg, guild) {
     .replace(/<t:(\d+)(?::\w)?>/g, (_, s) => new Date(Number(s) * 1000).toUTCString());
 }
 
-function toMysql(iso) {
-  return new Date(iso).toISOString().slice(0, 19).replace('T', ' ');
-}
+const toMysql = toMysqlDate;
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
