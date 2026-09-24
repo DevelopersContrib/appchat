@@ -37,6 +37,16 @@ export async function discord(path, token = process.env.DISCORD_BOT_TOKEN) {
   throw new Error('Discord is rate-limiting requests. Try again in a minute.');
 }
 
+/** Servers the AppChat bot has been added to, so admins can pick one instead of typing an ID. */
+export async function listBotGuilds(token) {
+  const guilds = await discord('/users/@me/guilds?limit=200', token);
+  return guilds.map((g) => ({
+    id: g.id,
+    name: g.name,
+    icon: g.icon ? `https://cdn.discordapp.com/icons/${g.id}/${g.icon}.png?size=64` : null,
+  }));
+}
+
 /** Server name, readable text channels, and lookup maps used to turn Discord markup into text. */
 export async function loadGuild(guildId, token) {
   const [guild, channels, roles] = await Promise.all([

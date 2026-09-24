@@ -18,11 +18,15 @@ export default function DiscordImport({ tenantSlug }) {
     fetch(`/api/admin/discord?tenant=${encodeURIComponent(tenantSlug)}`).then((r) => r.json()).then(setSetup).catch(() => {});
   }, [tenantSlug]);
 
-  async function loadServer(e) {
+  const refreshSetup = () =>
+    fetch(`/api/admin/discord?tenant=${encodeURIComponent(tenantSlug)}`).then((r) => r.json()).then(setSetup).catch(() => {});
+
+  async function loadServer(e, id = guildId) {
     e?.preventDefault();
     setError('');
     setGuild(null);
-    const res = await fetch(`/api/admin/discord?tenant=${encodeURIComponent(tenantSlug)}&guild=${encodeURIComponent(guildId.trim())}`);
+    setGuildId(id);
+    const res = await fetch(`/api/admin/discord?tenant=${encodeURIComponent(tenantSlug)}&guild=${encodeURIComponent(String(id).trim())}`);
     const data = await res.json().catch(() => ({}));
     if (!res.ok) return setError(data.error || 'Could not load that server');
     setGuild(data.guild);
@@ -101,10 +105,34 @@ export default function DiscordImport({ tenantSlug }) {
         </section>
 
         <section className="space-y-2">
-          <h2 className="text-sm font-semibold">2. Enter your Discord server ID</h2>
-          <p className="text-sm text-gray-400">
-            In Discord: Settings → Advanced → turn on Developer Mode. Then right-click your server and choose Copy Server ID.
-          </p>
+          <h2 className="text-sm font-semibold">2. Pick your Discord server</h2>
+          {setup?.guilds?.length > 0 ? (
+            <ul className="grid gap-2 sm:grid-cols-2">
+              {setup.guilds.map((g) => (
+                <li key={g.id}>
+                  <button
+                    onClick={() => loadServer(null, g.id)}
+                    disabled={running}
+                    className={`w-full flex items-center gap-3 rounded-xl border p-3 text-left text-sm ${guild?.id === g.id ? 'border-[#5865F2] bg-[#5865F2]/10' : 'border-gray-800 hover:border-gray-600'}`}
+                  >
+                    {g.icon ? <img src={g.icon} alt="" className="w-8 h-8 rounded-full" /> : <span className="w-8 h-8 rounded-full bg-[#5865F2] flex items-center justify-center font-bold">{g.name[0]}</span>}
+                    <span className="truncate">{g.name}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-gray-400">
+              Servers appear here after you add the bot (step 1).{' '}
+              <button onClick={refreshSetup} className="text-[#8b93ff] hover:underline">Refresh</button>
+            </p>
+          )}
+          <details className="text-sm text-gray-400">
+            <summary className="cursor-pointer text-xs text-gray-500">Or enter a server ID</summary>
+            <p className="my-2 text-xs">
+              Discord → User Settings → Advanced → turn on Developer Mode, then right-click the server icon → Copy Server ID.
+              In a browser it's also the first number in the address: discord.com/channels/<b>SERVER_ID</b>/…
+            </p>
           <form onSubmit={loadServer} className="flex gap-2">
             <input
               value={guildId}
@@ -117,6 +145,7 @@ export default function DiscordImport({ tenantSlug }) {
               Load channels
             </button>
           </form>
+          </details>
           {error && <p className="text-sm text-red-400">{error}</p>}
         </section>
 

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth.js';
 import { query } from '@/lib/db.js';
 import { requireTenantAdmin } from '@/lib/tenant.js';
-import { botInviteUrl, loadGuild, SOURCE } from '@/lib/discord-import.js';
+import { botInviteUrl, loadGuild, listBotGuilds, SOURCE } from '@/lib/discord-import.js';
 
 // Import screen data: bot setup status, and (with ?guild=) the server's channels + import progress.
 export async function GET(request) {
@@ -14,7 +14,10 @@ export async function GET(request) {
 
   const setup = { configured: Boolean(process.env.DISCORD_BOT_TOKEN), inviteUrl: botInviteUrl() };
   const guildId = (sp.get('guild') || '').trim();
-  if (!guildId) return NextResponse.json(setup);
+  if (!guildId) {
+    const guilds = setup.configured ? await listBotGuilds().catch(() => []) : [];
+    return NextResponse.json({ ...setup, guilds });
+  }
   if (!/^\d{5,25}$/.test(guildId)) return NextResponse.json({ error: 'That doesn’t look like a Discord server ID' }, { status: 400 });
 
   try {
