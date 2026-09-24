@@ -82,6 +82,6 @@ export function describePresence(member) {
   if (!member) return '';
   const time = localTime(member.timezone);
   if (!member.online) return [lastSeen(member.lastSeenAt), time && `${time} local`].filter(Boolean).join(' · ');
-  const where = member.status === 'away' ? 'Away' : member.where?.label;
+  const where = member.status === 'away' ? 'Away' : member.voiceChannelId ? '🔊 In voice' : member.where?.label;
   return [where, time && `${time} local`].filter(Boolean).join(' · ');
 }

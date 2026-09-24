@@ -5,6 +5,7 @@ import { findVnocDomain } from '@/lib/domains.js';
 import { query } from '@/lib/db.js';
 import Sidebar from '@/components/Sidebar.jsx';
 import MemberList from '@/components/MemberList.jsx';
+import VoiceDock from '@/components/VoiceDock.jsx';
 import { listDms } from '@/lib/presence.js';
 import { parseTenantSettings } from '@/lib/brand-agent-profiles.js';
 import RulesGate from '@/components/RulesGate.jsx';
@@ -80,6 +81,7 @@ export default async function TenantLayout({ children, params }) {
           <main className="flex-1 flex flex-col min-w-0 min-h-0" style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}>
             {children}
           </main>
+          <VoiceDock />
           <MemberList currentSlug={slug} currentUserId={user.id} canInvite={['owner', 'admin'].includes(membership.role) || Boolean(user.is_admin)} />
         </div>
       </>

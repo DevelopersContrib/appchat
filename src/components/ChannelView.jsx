@@ -140,6 +140,14 @@ export default function ChannelView({ channel, initialMessages, members, current
   }, [channel.id, dmPeer]);
 
   const [meetMenu, setMeetMenu] = useState(false);
+  const [voiceChannelId, setVoiceChannelId] = useState(null);
+  useEffect(() => {
+    const onState = (e) => setVoiceChannelId(e.detail?.channelId || null);
+    window.addEventListener('voice-state', onState);
+    return () => window.removeEventListener('voice-state', onState);
+  }, []);
+  const inVoiceHere = voiceChannelId === channel.id;
+  const voiceHere = (roster?.members || []).filter((m) => m.voiceChannelId === channel.id);
   const [scheduling, setScheduling] = useState(false);
 
   // Google Meet: starts now unless `start` is given; bounces through Google sign-in the first time.
@@ -403,6 +411,15 @@ export default function ChannelView({ channel, initialMessages, members, current
             title="Search sprints and add tasks"
           >
             Sprints
+          </button>
+          <button
+            onClick={() => window.dispatchEvent(new CustomEvent('voice-join', { detail: { channelId: channel.id } }))}
+            disabled={inVoiceHere}
+            className={`px-3 py-2 rounded-lg text-xs font-medium flex items-center gap-1.5 ${inVoiceHere ? 'bg-[#00b894]/20 text-[#00b894]' : 'bg-gray-800 hover:bg-gray-700'}`}
+            title={voiceHere.length ? `${voiceHere.map((m) => m.name).join(', ')} in voice` : 'Join voice'}
+          >
+            🔊 <span className="hidden sm:inline">{inVoiceHere ? 'In voice' : 'Voice'}</span>
+            {voiceHere.length > 0 && <span className="text-[10px] px-1.5 rounded-full bg-[#00b894] text-white">{voiceHere.length}</span>}
           </button>
           <div className="relative">
             <button

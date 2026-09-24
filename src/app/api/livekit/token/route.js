@@ -6,6 +6,9 @@ export async function POST(request) {
   try {
     const user = await requireSession();
     const { room } = await request.json();
+    if (typeof room !== 'string' || !room || room.startsWith('appchat-voice-')) {
+      return NextResponse.json({ error: 'Invalid room' }, { status: 400 });
+    }
 
     if (!process.env.LIVEKIT_API_KEY || !process.env.LIVEKIT_API_SECRET) {
       return NextResponse.json({ error: 'LiveKit not configured' }, { status: 503 });

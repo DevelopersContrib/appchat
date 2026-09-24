@@ -51,6 +51,7 @@ export default function Sidebar({ tenant, channels, dms: initialDms = [], user, 
   }, [currentChannelId]);
 
   const membersById = Object.fromEntries(roster.members.map((m) => [m.id, m]));
+  const voiceCounts = roster.members.reduce((acc, m) => (m.voiceChannelId ? { ...acc, [m.voiceChannelId]: (acc[m.voiceChannelId] || 0) + 1 } : acc), {});
   // On phones the sidebar is a drawer; it starts open on the workspace home, where there's nothing else to show.
   const [mobileOpen, setMobileOpen] = useState(!inChannel);
   const [dialog, setDialog] = useState(null); // 'new' | 'browse' | 'search'
@@ -224,6 +225,7 @@ export default function Sidebar({ tenant, channels, dms: initialDms = [], user, 
             <Link key={ch.id} href={href} className={rowClass(active, unread)} {...menuHandlers('channel', { id: ch.id, name: ch.name })}>
               <span className={`text-center shrink-0 ${ch.emoji ? 'w-4' : 'w-3 text-gray-600'}`}>{ch.emoji || (ch.is_private ? '🔒' : '#')}</span>
               <span className="truncate">{ch.name}</span>
+              {voiceCounts[ch.id] > 0 && <span className="ml-auto text-[10px] text-[#00b894] shrink-0" title="People in voice">🔊{voiceCounts[ch.id]}</span>}
               {unread > 0 && !active && <UnreadBadge count={unread} />}
               {moreButton('channel', { id: ch.id, name: ch.name })}
             </Link>

@@ -73,6 +73,9 @@ export async function GET(request) {
             c.id AS channel_id, c.name AS channel_name, c.is_dm, c.is_private,
             (SELECT 1 FROM channel_members v WHERE v.channel_id = c.id AND v.user_id = ?) AS viewer_in_channel,
             r.name AS room_name,
+            p.voice_channel_id,
+            (SELECT 1 FROM channels vc LEFT JOIN channel_members vm ON vm.channel_id = vc.id AND vm.user_id = ?
+              WHERE vc.id = p.voice_channel_id AND (vc.is_private = 0 OR vm.user_id IS NOT NULL)) AS voice_visible,
             (SELECT COUNT(*) FROM kudos k WHERE k.tenant_id = tm.tenant_id AND k.to_user_id = u.id) AS kudos
      FROM tenant_members tm
      JOIN users u ON u.id = tm.user_id
@@ -81,7 +84,7 @@ export async function GET(request) {
      LEFT JOIN rooms r ON r.id = p.room_id
      WHERE tm.tenant_id = ?
      ORDER BY online DESC, COALESCE(NULLIF(u.name, ''), u.email)`,
-    [tenantId, user.id, tenantId]
+    [tenantId, user.id, user.id, tenantId]
   );
 
   const members = rows.map((r) => {
@@ -108,6 +111,7 @@ export async function GET(request) {
       lastSeenAt: r.last_seen_at,
       contribUrl: contribProfileUrl(r.contrib_username),
       kudos: Number(r.kudos || 0),
+      voiceChannelId: online && r.voice_visible ? r.voice_channel_id : null,
     };
   });
 
