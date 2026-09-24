@@ -3,6 +3,7 @@ import { requireSession } from '@/lib/auth.js';
 import { query, insert, queryOne } from '@/lib/db.js';
 import { unfurlUrl } from '@/lib/unfurl.js';
 import { rateLimit, getClientIp, sanitizeString, sanitizeUrl } from '@/lib/security.js';
+import { parseChannelFromKey, fileUrlForKey } from '@/lib/storage.js';
 import { buildBrandAgentReply } from '@/lib/brand-agent.js';
 import { generateClaudeAgentReply } from '@/lib/claude-agent.js';
 import { parseTenantSettings, resolveToneProfile } from '@/lib/brand-agent-profiles.js';
@@ -102,7 +103,16 @@ export async function POST(request, { params }) {
     );
 
     if (attachments.length) {
-      for (const att of attachments) {
+      for (const att of attachments.slice(0, 10)) {
+        if (att.storageKey) {
+          // Uploaded file: the key must belong to this channel (it was issued by /api/uploads for it).
+          if (parseChannelFromKey(att.storageKey)?.channelId !== Number(channelId)) continue;
+          await insert(
+            'INSERT INTO message_attachments (message_id, type, title, url, mime_type, size_bytes, storage_key) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [msgId, 'file', sanitizeString(att.title, 255) || 'file', fileUrlForKey(att.storageKey), sanitizeString(att.mimeType, 100) || null, Number(att.sizeBytes) || null, att.storageKey]
+          );
+          continue;
+        }
         const safeUrl = sanitizeUrl(att.url);
         if (!safeUrl) continue;
         await insert(

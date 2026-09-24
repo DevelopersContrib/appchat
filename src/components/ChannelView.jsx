@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import MessageList from './MessageList.jsx';
 import MessageInput from './MessageInput.jsx';
+import SprintPanel from './SprintPanel.jsx';
 
 function mergeUniqueMessages(existing, incoming) {
   const map = new Map();
@@ -28,6 +29,10 @@ function mergeUniqueMessages(existing, incoming) {
 export default function ChannelView({ channel, initialMessages, members, currentUser, tenantSlug }) {
   const [messages, setMessages] = useState(() => mergeUniqueMessages([], initialMessages || []));
   const pollRef = useRef(null);
+  const inputRef = useRef(null);
+  const [dragging, setDragging] = useState(false);
+  const [sprintPanel, setSprintPanel] = useState({ open: false, query: '' });
+  const [commandError, setCommandError] = useState('');
   const messagesRef = useRef(messages);
   const [hasEarlier, setHasEarlier] = useState((initialMessages || []).length >= 100);
   const [loadingEarlier, setLoadingEarlier] = useState(false);
@@ -75,7 +80,37 @@ export default function ChannelView({ channel, initialMessages, members, current
     fetch(`/api/channels/${channel.id}/agent`, { method: 'POST' }).catch(() => {});
   }, [channel.id]);
 
+  // Chat shortcuts: "/task [domain.com] title" adds a task, "/sprints [search]" opens the sprint panel.
+  async function runCommand(text) {
+    const [cmd, ...rest] = text.trim().split(/\s+/);
+    if (cmd === '/sprints' || cmd === '/sprint') {
+      setSprintPanel({ open: true, query: rest.join(' ') });
+      return true;
+    }
+    if (cmd === '/task') {
+      let domain = channel.tenant_domain;
+      if (rest[0] && /^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(rest[0])) domain = rest.shift();
+      const title = rest.join(' ');
+      if (!title) {
+        setCommandError('Usage: /task [domain.com] task title');
+        return true;
+      }
+      const res = await fetch('/api/vnoc/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ domain, title, channelId: channel.id }),
+      });
+      const data = await res.json().catch(() => ({}));
+      setCommandError(res.ok ? '' : data.error || 'Could not add the task');
+      if (res.ok) pollMessages();
+      return true;
+    }
+    return false;
+  }
+
   async function handleSend(body, attachments) {
+    if (!attachments?.length && body?.trim().startsWith('/') && (await runCommand(body))) return;
+
     const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const optimisticMessage = {
       id: tempId,
@@ -124,7 +159,22 @@ export default function ChannelView({ channel, initialMessages, members, current
   }
 
   return (
-    <div className="flex-1 flex flex-col h-full min-h-0">
+    <div
+      className="relative flex-1 flex flex-col h-full min-h-0"
+      onDragOver={(e) => { if (e.dataTransfer?.types?.includes('Files')) { e.preventDefault(); setDragging(true); } }}
+      onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setDragging(false); }}
+      onDrop={(e) => {
+        if (!e.dataTransfer?.files?.length) return;
+        e.preventDefault();
+        setDragging(false);
+        inputRef.current?.addFiles(e.dataTransfer.files);
+      }}
+    >
+      {dragging && (
+        <div className="pointer-events-none absolute inset-2 z-20 rounded-2xl border-2 border-dashed border-[#00b894] bg-gray-950/80 flex items-center justify-center text-sm text-gray-200">
+          Drop files to upload to #{channel.name}
+        </div>
+      )}
       <header className="px-3 md:px-5 py-3 border-b border-gray-800 flex items-center justify-between gap-2 bg-gray-950/80 backdrop-blur">
         <button
           onClick={() => window.dispatchEvent(new Event('toggle-sidebar'))}
@@ -149,6 +199,13 @@ export default function ChannelView({ channel, initialMessages, members, current
           </span>
           <span className="hidden sm:inline text-xs text-gray-500">{members.length} members</span>
           <button
+            onClick={() => setSprintPanel({ open: true, query: '' })}
+            className="px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-xs font-medium"
+            title="Search sprints and add tasks"
+          >
+            Sprints
+          </button>
+          <button
             onClick={openAgentMeetingTab}
             className="px-3.5 py-2 bg-gradient-to-r from-[#00b894] to-[#00a783] hover:opacity-95 rounded-lg text-xs font-medium transition flex items-center gap-1.5 shadow-lg shadow-[#00b894]/20"
           >
@@ -169,7 +226,17 @@ export default function ChannelView({ channel, initialMessages, members, current
         loadingEarlier={loadingEarlier}
         onLoadEarlier={loadEarlier}
       />
-      <MessageInput onSend={handleSend} />
+      {commandError && (
+        <p className="px-5 pb-1 text-xs text-red-400">{commandError}</p>
+      )}
+      <MessageInput ref={inputRef} onSend={handleSend} channelId={channel.id} />
+      <SprintPanel
+        open={sprintPanel.open}
+        initialQuery={sprintPanel.query}
+        onClose={() => setSprintPanel({ open: false, query: '' })}
+        defaultDomain={channel.tenant_domain}
+        channelId={channel.id}
+      />
     </div>
   );
 }

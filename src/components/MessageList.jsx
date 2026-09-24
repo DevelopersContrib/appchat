@@ -154,7 +154,9 @@ export default function MessageList({ messages, currentUser, hasEarlier, loading
                     ↪ <span className="text-gray-400">{meta.replyTo.author}</span> {meta.replyTo.excerpt}
                   </p>
                 )}
-                <p className="text-sm text-gray-300 break-words whitespace-pre-wrap">{msg.body}</p>
+                {meta.card ? <VnocCard card={meta.card} /> : !(msg.body === 'Shared attachment' && msg.attachments?.length) && (
+                  <p className="text-sm text-gray-300 break-words whitespace-pre-wrap">{msg.body}</p>
+                )}
                 {msg.attachments?.map((att, attIndex) => (
                   <LinkPreview
                     key={`${String(att.id ?? 'att')}-${att.url ?? ''}-${attIndex}`}
@@ -168,6 +170,28 @@ export default function MessageList({ messages, currentUser, hasEarlier, loading
       })}
       <div ref={endRef} />
     </div>
+  );
+}
+
+// Task/sprint created from chat (see /api/vnoc/*).
+function VnocCard({ card }) {
+  const isTask = card.kind === 'vnoc_task';
+  const Wrapper = card.url ? 'a' : 'div';
+  return (
+    <Wrapper
+      {...(card.url ? { href: card.url, target: '_blank', rel: 'noopener noreferrer' } : {})}
+      className="mt-1 block max-w-md rounded-xl border border-[#00b894]/30 bg-[#00b894]/5 px-3 py-2 hover:border-[#00b894]/60 transition"
+    >
+      <p className="text-[10px] uppercase tracking-wide text-[#00b894]">
+        {isTask ? 'New task' : 'New sprint'} · {card.domain}
+      </p>
+      <p className="text-sm font-medium text-gray-100">{card.title}</p>
+      {isTask && (
+        <p className="text-xs text-gray-500">
+          {card.sprintTitle ? `in ${card.sprintTitle}` : ''}{card.priority && card.priority !== 'normal' ? ` · ${card.priority}` : ''}
+        </p>
+      )}
+    </Wrapper>
   );
 }
 

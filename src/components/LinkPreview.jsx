@@ -60,10 +60,33 @@ export default function LinkPreview({ attachment }) {
     );
   }
 
+  const mime = attachment.mime_type || attachment.mimeType || '';
+  const size = attachment.size_bytes || attachment.sizeBytes;
+
+  if (attachment.type === 'file' && /^image\/(png|jpe?g|gif|webp|avif|heic|heif)$/i.test(mime)) {
+    return (
+      <a href={attachment.url} target="_blank" rel="noopener noreferrer" className="block mt-2 max-w-sm">
+        <img src={attachment.url} alt={attachment.title || ''} loading="lazy"
+          className="max-h-80 w-auto max-w-full rounded-xl border border-gray-700/50 bg-gray-900" />
+      </a>
+    );
+  }
+
+  if (attachment.type === 'file' && /^video\/(mp4|webm|quicktime)$/i.test(mime)) {
+    return <video src={attachment.url} controls preload="metadata" className="mt-2 max-h-80 max-w-full rounded-xl bg-black" />;
+  }
+
   return (
     <a href={attachment.url} target="_blank" rel="noopener noreferrer"
-      className="inline-flex items-center gap-2 mt-2 px-3 py-1.5 bg-gray-800/50 border border-gray-700/50 rounded-lg text-sm text-blue-400 hover:border-gray-600 transition">
-      📎 {attachment.title || 'Attachment'}
+      className="inline-flex items-center gap-2 mt-2 px-3 py-1.5 bg-gray-800/50 border border-gray-700/50 rounded-lg text-sm text-blue-400 hover:border-gray-600 transition max-w-full">
+      📎 <span className="truncate">{attachment.title || 'Attachment'}</span>
+      {size ? <span className="text-xs text-gray-500 shrink-0">{formatSize(size)}</span> : null}
     </a>
   );
+}
+
+function formatSize(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1048576) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / 1048576).toFixed(1)} MB`;
 }

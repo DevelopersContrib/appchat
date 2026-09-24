@@ -2,13 +2,11 @@ import mysql from 'mysql2/promise';
 
 let vnocPool;
 
-function getVnocPool() {
+// VNOC's main database (domains, members, sprints/tasks). Credentials come from VNOC_DATABASE_URL.
+export function getVnocPool() {
   if (!vnocPool) {
     vnocPool = mysql.createPool({
-      host: 'vnocdb.cyh3tjizziz6.us-west-2.rds.amazonaws.com',
-      user: 'maida',
-      password: 'vschool3030',
-      database: 'domaindi_managedomain',
+      uri: process.env.VNOC_DATABASE_URL,
       waitForConnections: true,
       connectionLimit: 5,
       idleTimeout: 60000,

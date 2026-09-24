@@ -9,7 +9,7 @@ export default async function ChannelPage({ params }) {
   if (!user) redirect('/login');
 
   const channel = await queryOne(
-    `SELECT c.* FROM channels c
+    `SELECT c.*, COALESCE(t.domain, CONCAT(t.slug, '.com')) AS tenant_domain FROM channels c
      JOIN tenants t ON t.id = c.tenant_id
      WHERE c.id = ? AND t.slug = ?`,
     [channelId, slug]

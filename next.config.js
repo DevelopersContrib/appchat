@@ -1,3 +1,6 @@
+// S3 origins for direct uploads and media playback (see src/lib/storage.js).
+const STORAGE_ORIGINS = 'https://*.amazonaws.com';
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
@@ -27,9 +30,9 @@ const nextConfig = {
               "style-src 'self' 'unsafe-inline' https://brandidentity.com https://www.brandidentity.com https://fonts.googleapis.com",
               "font-src 'self' https://brandidentity.com https://www.brandidentity.com https://fonts.gstatic.com",
               "img-src 'self' data: https: blob:",
-              "connect-src 'self' https://*.livekit.cloud wss://*.livekit.cloud https://*.daily.co https://api.daily.co https://accounts.google.com https://oauth2.googleapis.com https://www.googleapis.com https://brandidentity.com https://www.brandidentity.com",
+              `connect-src 'self' ${STORAGE_ORIGINS} https://*.livekit.cloud wss://*.livekit.cloud https://*.daily.co https://api.daily.co https://accounts.google.com https://oauth2.googleapis.com https://www.googleapis.com https://brandidentity.com https://www.brandidentity.com`,
               "frame-src 'self' https://*.daily.co https://auth.magic.link",
-              "media-src 'self' https://*.livekit.cloud blob:",
+              `media-src 'self' ${STORAGE_ORIGINS} https://*.livekit.cloud blob:`,
               "worker-src 'self' blob:",
             ].join('; '),
           },

@@ -1,9 +1,22 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, forwardRef, useImperativeHandle } from 'react';
 import DrivePicker from './DrivePicker.jsx';
 
-export default function MessageInput({ onSend }) {
+function putWithProgress(url, file, contentType, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', url);
+    xhr.setRequestHeader('Content-Type', contentType);
+    xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total);
+    xhr.onload = () => (xhr.status < 300 ? resolve() : reject(new Error(`Upload failed (${xhr.status})`)));
+    xhr.onerror = () => reject(new Error('Upload failed. Check your connection.'));
+    xhr.send(file);
+  });
+}
+
+// Exposes addFiles() so the channel view can hand over dropped files.
+const MessageInput = forwardRef(function MessageInput({ onSend, channelId }, ref) {
   const [body, setBody] = useState('');
   const [sending, setSending] = useState(false);
   const [showDrive, setShowDrive] = useState(false);
@@ -12,13 +25,66 @@ export default function MessageInput({ onSend }) {
   const [linkTitle, setLinkTitle] = useState('');
   const [pendingAttachments, setPendingAttachments] = useState([]);
   const inputRef = useRef(null);
+  const fileRef = useRef(null);
+  const uploading = pendingAttachments.some((a) => a.uploading);
+
+  useImperativeHandle(ref, () => ({ addFiles: uploadFiles }));
+
+  function updateAttachment(localId, patch) {
+    setPendingAttachments((prev) => prev.map((a) => (a.localId === localId ? { ...a, ...patch } : a)));
+  }
+
+  function uploadFiles(fileList) {
+    const files = Array.from(fileList || []).slice(0, 10);
+    for (const file of files) {
+      const localId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const contentType = file.type || 'application/octet-stream';
+      setPendingAttachments((prev) => [...prev, {
+        localId,
+        type: 'file',
+        title: file.name || 'pasted-image.png',
+        mimeType: contentType,
+        sizeBytes: file.size,
+        previewUrl: contentType.startsWith('image/') ? URL.createObjectURL(file) : null,
+        uploading: true,
+        progress: 0,
+      }]);
+
+      (async () => {
+        try {
+          const res = await fetch('/api/uploads', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ channelId, filename: file.name || 'pasted-image.png', contentType, size: file.size }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || 'Upload failed');
+          await putWithProgress(data.uploadUrl, file, data.contentType, (p) => updateAttachment(localId, { progress: p }));
+          updateAttachment(localId, { storageKey: data.key, uploading: false, progress: 1 });
+        } catch (err) {
+          updateAttachment(localId, { uploading: false, error: err.message });
+        }
+      })();
+    }
+  }
+
+  function handlePaste(e) {
+    const files = Array.from(e.clipboardData?.files || []);
+    if (files.length) {
+      e.preventDefault();
+      uploadFiles(files);
+    }
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if ((!body.trim() && !pendingAttachments.length) || sending) return;
+    const ready = pendingAttachments
+      .filter((a) => !a.error && !a.uploading && (a.type !== 'file' || a.storageKey))
+      .map(({ localId, uploading, progress, previewUrl, error, ...a }) => ({ ...a, url: a.url || previewUrl }));
+    if ((!body.trim() && !ready.length) || sending || uploading) return;
 
     setSending(true);
-    await onSend(body, pendingAttachments.length ? pendingAttachments : undefined);
+    await onSend(body, ready.length ? ready : undefined);
     setBody('');
     setPendingAttachments([]);
     setSending(false);
@@ -42,7 +108,10 @@ export default function MessageInput({ onSend }) {
   }
 
   function removeAttachment(i) {
-    setPendingAttachments(prev => prev.filter((_, idx) => idx !== i));
+    setPendingAttachments(prev => {
+      if (prev[i]?.previewUrl) URL.revokeObjectURL(prev[i].previewUrl);
+      return prev.filter((_, idx) => idx !== i);
+    });
   }
 
   function addLinkAttachment() {
@@ -109,16 +178,41 @@ export default function MessageInput({ onSend }) {
         {pendingAttachments.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-2">
             {pendingAttachments.map((att, i) => (
-              <div key={i} className="flex items-center gap-2 px-3 py-1.5 bg-gray-800 rounded-lg text-xs">
-                <span>{att.type === 'gdrive' ? '📄' : att.type === 'presentation' ? '📽️' : '🔗'}</span>
-                <span className="truncate max-w-[150px]">{att.title}</span>
-                <button type="button" onClick={() => removeAttachment(i)} className="text-gray-500 hover:text-red-400">×</button>
+              <div key={att.localId || i} className={`relative flex items-center gap-2 px-3 py-1.5 bg-gray-800 rounded-lg text-xs overflow-hidden ${att.error ? 'ring-1 ring-red-500/60' : ''}`}>
+                {att.previewUrl ? (
+                  <img src={att.previewUrl} alt="" className="w-8 h-8 rounded object-cover" />
+                ) : (
+                  <span>{att.type === 'gdrive' ? '📄' : att.type === 'presentation' ? '📽️' : att.type === 'file' ? '📎' : '🔗'}</span>
+                )}
+                <span className="truncate max-w-[150px]">{att.error || att.title}</span>
+                <button type="button" onClick={() => removeAttachment(i)} className="text-gray-500 hover:text-red-400" aria-label="Remove">×</button>
+                {att.uploading && (
+                  <span className="absolute left-0 bottom-0 h-0.5 bg-[#00b894] transition-all" style={{ width: `${Math.round((att.progress || 0) * 100)}%` }} />
+                )}
               </div>
             ))}
           </div>
         )}
 
-        <div className="flex items-end gap-2 bg-gray-800 rounded-xl px-4 py-2">
+        <div className="flex items-end gap-2 bg-gray-800 rounded-xl px-3 md:px-4 py-2">
+          <input
+            ref={fileRef}
+            type="file"
+            multiple
+            className="hidden"
+            onChange={(e) => { uploadFiles(e.target.files); e.target.value = ''; }}
+          />
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            className="text-gray-500 hover:text-[#fdcb6e] transition p-1"
+            title="Upload images or files"
+            aria-label="Upload images or files"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+          </button>
           <button
             type="button"
             onClick={() => setShowDrive(true)}
@@ -145,14 +239,15 @@ export default function MessageInput({ onSend }) {
             value={body}
             onChange={(e) => setBody(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Type a message or paste a URL..."
+            onPaste={handlePaste}
+            placeholder="Message, link, or paste an image..."
             rows={1}
             className="flex-1 bg-transparent resize-none text-base md:text-sm focus:outline-none placeholder:text-gray-500 max-h-32"
             style={{ minHeight: '24px' }}
           />
           <button
             type="submit"
-            disabled={(!body.trim() && !pendingAttachments.length) || sending}
+            disabled={(!body.trim() && !pendingAttachments.length) || sending || uploading}
             className="text-[#d63031] hover:text-[#ff7675] disabled:text-gray-600 transition p-1"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -164,4 +259,6 @@ export default function MessageInput({ onSend }) {
       </form>
     </>
   );
-}
+});
+
+export default MessageInput;

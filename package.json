@@ -14,6 +14,8 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.100.1",
+    "@aws-sdk/client-s3": "^3.1139.0",
+    "@aws-sdk/s3-request-presigner": "^3.1139.0",
     "@livekit/components-react": "^2.7.0",
     "@livekit/components-styles": "^1.2.0",
     "@magic-sdk/admin": "^2.4.1",
