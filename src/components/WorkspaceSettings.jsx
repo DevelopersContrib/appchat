@@ -86,7 +86,7 @@ export default function WorkspaceSettings({ tenantSlug, initialTab, channels, my
           {tab === 'members' && <Members base={base} myId={myId} tenantSlug={tenantSlug} />}
           {settings && tab === 'rules' && <Rules settings={settings} onSave={saveSettings} status={status} />}
           {settings && tab === 'moderation' && <Moderation base={base} settings={settings} onSave={saveSettings} status={status} />}
-          {tab === 'tools' && <Tools tenantSlug={tenantSlug} />}
+          {tab === 'tools' && <Tools tenantSlug={tenantSlug} base={base} channels={channels} />}
           {settings && tab === 'email' && <Email base={base} settings={settings} onSave={saveSettings} status={status} channels={channels} />}
           {!settings && status && <Status status={status} />}
         </div>
@@ -248,9 +248,10 @@ function Moderation({ base, settings, onSave, status }) {
   );
 }
 
-function Tools({ tenantSlug }) {
+function Tools({ tenantSlug, base, channels }) {
   return (
     <section className="space-y-3">
+      <Debrief base={base} channels={channels} />
       <h2 className="text-sm font-semibold">Import</h2>
       <Link href={`/${tenantSlug}/import/vnoc`} className="flex items-center gap-3 rounded-xl border border-gray-800 p-4 hover:border-[#00b894]/60">
         <span className="w-9 h-9 rounded-lg bg-[#00b894] flex items-center justify-center text-white font-bold">V</span>
@@ -274,6 +275,46 @@ function Tools({ tenantSlug }) {
         </span>
       </Link>
     </section>
+  );
+}
+
+// LoopAgent daily debrief → a channel (platform admins only; hidden otherwise).
+function Debrief({ base, channels }) {
+  const [info, setInfo] = useState(null);
+  const [status, setStatus] = useState(null);
+  useEffect(() => { api(`${base}/debrief`).then(setInfo).catch(() => setInfo(null)); }, [base]);
+  if (!info?.available) return null;
+
+  async function save(patch, ok) {
+    setStatus(null);
+    try {
+      const d = await api(`${base}/debrief`, json('PUT', patch));
+      setInfo((i) => ({ ...i, channelId: d.channelId }));
+      setStatus({ ok: patch.postNow ? (d.posted ? 'Posted.' : 'Already posted today.') : ok });
+    } catch (err) {
+      setStatus({ error: err.message });
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-[#6c5ce7]/40 bg-[#6c5ce7]/5 p-4 space-y-3 mb-4">
+      <div>
+        <h2 className="text-sm font-semibold">LoopAgent daily debrief</h2>
+        <p className="text-xs text-gray-400">Posts each day’s network debrief into a channel every morning.{info.latest ? ` Latest: “${info.latest.headline}” (${info.latest.date}).` : ''}</p>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <select
+          value={info.channelId || ''}
+          onChange={(e) => save({ channelId: e.target.value ? Number(e.target.value) : null }, e.target.value ? 'Debriefs will post there daily.' : 'Debriefs turned off.')}
+          className="px-2 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm"
+        >
+          <option value="">Off</option>
+          {channels.map((c) => <option key={c.id} value={c.id}>Post to #{c.name}</option>)}
+        </select>
+        {info.channelId && <button onClick={() => save({ postNow: true })} className="px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-sm">Post latest now</button>}
+      </div>
+      <Status status={status} />
+    </div>
   );
 }
 

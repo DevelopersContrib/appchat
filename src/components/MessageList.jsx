@@ -217,7 +217,7 @@ export default function MessageList({ messages, currentUser, hasEarlier, loading
                     ↪ <span className="text-gray-300">{replyTo.author}</span> {replyTo.excerpt}
                   </p>
                 )}
-                {meta.card?.kind === 'meet' ? <MeetCard card={meta.card} /> : meta.card ? <VnocCard card={meta.card} /> : !(msg.body === 'Shared attachment' && msg.attachments?.length) && (
+                {meta.card?.kind === 'debrief' ? <DebriefCard card={meta.card} /> : meta.card?.kind === 'meet' ? <MeetCard card={meta.card} /> : meta.card ? <VnocCard card={meta.card} /> : !(msg.body === 'Shared attachment' && msg.attachments?.length) && (
                   <MessageBody text={msg.body} myNames={myNames} />
                 )}
                 {msg.edited_at && <span className="text-[10px] text-gray-600">(edited)</span>}
@@ -312,6 +312,19 @@ function SheetItem({ children, onClick, danger }) {
     <button onClick={onClick} className={`w-full text-left px-4 py-3 rounded-xl bg-gray-800/60 text-sm ${danger ? 'text-red-400' : 'text-gray-100'}`}>
       {children}
     </button>
+  );
+}
+
+function DebriefCard({ card }) {
+  return (
+    <div className="mt-1 max-w-lg rounded-xl border border-[#6c5ce7]/40 bg-[#6c5ce7]/10 px-3 py-2.5">
+      <p className="text-[10px] uppercase tracking-wide text-[#a29bfe]">LoopAgent daily debrief · {card.date}</p>
+      <p className="text-sm font-semibold text-gray-100">{card.headline}</p>
+      {card.summary && <p className="mt-1 text-sm text-gray-300 whitespace-pre-wrap line-clamp-6">{card.summary}</p>}
+      <a href={card.url} target="_blank" rel="noopener noreferrer" className="inline-block mt-2 px-3 py-1.5 rounded-lg bg-[#6c5ce7] hover:bg-[#5b4bd6] text-xs font-medium text-white">
+        Read full debrief
+      </a>
+    </div>
   );
 }
 
