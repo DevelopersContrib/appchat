@@ -77,26 +77,38 @@ export async function lastImportedId(db, channelId) {
 }
 
 /**
- * Imports up to maxPages × 100 messages of one Discord channel after the last imported one.
+ * Imports up to maxPages × 100 messages of one Discord channel, reading forward from `cursor`
+ * (a Discord message id; '0' = the very beginning). Already-imported messages are skipped by the
+ * unique key, so scanning from the start safely fills gaps (e.g. messages that came through blank
+ * before Message Content Intent was enabled). Pass cursor = null to resume after the newest imported one.
  * `db` is a single mysql2/promise connection (transactions need one connection).
- * Returns { channelId, imported, done }.
+ * Returns { channelId, imported, done, cursor } — pass `cursor` back in for the next step.
  */
-export async function importChannelStep(db, { tenantId, guild, dc, token, maxPages = 5, userMap = {}, emailToUserId = new Map(), dryRun = false }) {
+export async function importChannelStep(db, { tenantId, guild, dc, token, cursor = null, maxPages = 5, userMap = {}, emailToUserId = new Map(), dryRun = false }) {
   const channelId = dryRun ? null : await ensureChannel(db, tenantId, dc);
-  let after = channelId ? await lastImportedId(db, channelId) : '0';
+  let after = cursor ?? (channelId ? await lastImportedId(db, channelId) : '0');
   let imported = 0;
+  let skippedBlank = 0;
 
   for (let page = 0; page < maxPages; page++) {
     const batch = await discord(`/channels/${dc.id}/messages?limit=100&after=${after}`, token);
-    if (!batch.length) return { channelId, imported, done: true };
+    if (!batch.length) return { channelId, imported, skippedBlank, done: true, cursor: after };
     batch.sort((a, b) => (BigInt(a.id) < BigInt(b.id) ? -1 : 1));
     after = batch[batch.length - 1].id;
 
     const rows = batch.map((m) => toRow(m, guild, userMap, emailToUserId)).filter(Boolean);
+    skippedBlank += batch.filter((m) => CONTENT_MESSAGE_TYPES.has(m.type) && !m.content && !m.attachments?.length && !m.embeds?.length && !m.sticker_items?.length).length;
     imported += dryRun ? rows.length : rows.length && (await insertPage(db, channelId, rows));
-    if (batch.length < 100) return { channelId, imported, done: true };
+    if (batch.length < 100) return { channelId, imported, skippedBlank, done: true, cursor: after };
   }
-  return { channelId, imported, done: false };
+  return { channelId, imported, skippedBlank, done: false, cursor: after };
+}
+
+/** True when the bot app has Discord's Message Content Intent (without it, message text comes back blank). */
+export async function hasMessageContentIntent(token) {
+  const app = await discord('/applications/@me', token);
+  const flags = Number(app.flags || 0);
+  return Boolean(flags & (1 << 18) || flags & (1 << 19));
 }
 
 function toRow(msg, guild, userMap, emailToUserId) {

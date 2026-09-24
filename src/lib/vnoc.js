@@ -140,3 +140,49 @@ export async function createSprint({ domain, title, description, goalDate, actor
 export function taskUrl(taskId) {
   return `${VNOC_APP_URL}/tasks/${taskId}`;
 }
+
+/** A VNOC domain's people: the owner plus everyone on its team (active members with an email). */
+export async function getDomainTeam(domainId) {
+  const rows = await vq(
+    `SELECT m.member_id, m.email, m.firstname, m.lastname, m.username, 'owner' AS role
+     FROM domain d JOIN members m ON m.member_id = d.member_id
+     WHERE d.domain_id = ?
+     UNION
+     SELECT m.member_id, m.email, m.firstname, m.lastname, m.username, COALESCE(tr.role_name, 'member') AS role
+     FROM team t
+     JOIN team_member tm ON tm.team_id = t.team_id
+     JOIN members m ON m.member_id = tm.member_id
+     LEFT JOIN teamrole tr ON tr.role_id = tm.role_id
+     WHERE t.domain_id = ?`,
+    [domainId, domainId]
+  );
+  const seen = new Set();
+  return rows
+    .filter((r) => r.email && /@/.test(r.email))
+    .filter((r) => (seen.has(r.email.toLowerCase()) ? false : seen.add(r.email.toLowerCase())))
+    .map((r) => ({
+      memberId: r.member_id,
+      email: r.email.toLowerCase(),
+      name: `${r.firstname || ''} ${r.lastname || ''}`.trim() || r.username || r.email.split('@')[0],
+      role: r.role,
+    }));
+}
+
+/**
+ * Best-guess VNOC domain for a channel name the user can access, e.g. "realtydao-updates" → realtydao.com.
+ * Returns null when nothing plausible exists.
+ */
+export async function suggestDomainForChannel(access, channelName) {
+  const clean = String(channelName || '').toLowerCase().replace(/[^a-z0-9-]+/g, '').replace(/^-+|-+$/g, '');
+  if (clean.length < 3) return null;
+  const first = clean.split('-')[0];
+  const candidates = [...new Set([clean, clean.replace(/-/g, ''), first].filter((c) => c.length >= 3))].map((c) => `${c}.com`);
+  const scope = domainScope(access);
+  const [row] = await vq(
+    `SELECT d.domain_id, d.domain_name FROM domain d
+     WHERE d.domain_name IN (?) AND ${scope.sql}
+     ORDER BY FIELD(d.domain_name, ?) LIMIT 1`,
+    [candidates, ...scope.params, candidates]
+  );
+  return row || null;
+}

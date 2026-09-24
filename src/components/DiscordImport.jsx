@@ -40,6 +40,8 @@ export default function DiscordImport({ tenantSlug }) {
     stopRef.current = false;
     for (const ch of channels.filter((c) => selected.has(c.id))) {
       let count = 0;
+      let cursor = '0';
+      let blank = 0;
       setProgress((p) => ({ ...p, [ch.id]: { count, state: 'running' } }));
       try {
         for (;;) {
@@ -47,12 +49,14 @@ export default function DiscordImport({ tenantSlug }) {
           const res = await fetch('/api/admin/discord/import', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ tenant: tenantSlug, guild: guild.id, channelId: ch.id, importedSoFar: count }),
+            body: JSON.stringify({ tenant: tenantSlug, guild: guild.id, channelId: ch.id, importedSoFar: count, cursor }),
           });
           const data = await res.json().catch(() => ({}));
           if (!res.ok) throw new Error(data.error || 'Import failed');
           count += data.imported;
-          setProgress((p) => ({ ...p, [ch.id]: { count, state: data.done ? 'done' : 'running', channelId: data.channelId } }));
+          cursor = data.cursor;
+          blank += data.skippedBlank || 0;
+          setProgress((p) => ({ ...p, [ch.id]: { count, blank, state: data.done ? 'done' : 'running', channelId: data.channelId } }));
           if (data.done) break;
         }
       } catch (err) {
@@ -84,6 +88,15 @@ export default function DiscordImport({ tenantSlug }) {
       </header>
 
       <div className="max-w-2xl p-4 md:p-6 space-y-6">
+        {setup?.configured && setup.contentIntent === false && (
+          <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-4 text-sm text-gray-300">
+            <p className="font-medium text-red-300">Message text is switched off for the AppChat bot</p>
+            <p className="mt-1">
+              Discord only shares message text when the bot has <b>Message Content Intent</b>. Until it's on, imported messages come through blank and are skipped.
+              In the Discord Developer Portal: your app → Bot → Privileged Gateway Intents → turn on Message Content Intent → Save. Then import again — it fills in what was missed.
+            </p>
+          </div>
+        )}
         {setup && !setup.configured && (
           <div className="rounded-xl border border-[#fdcb6e]/30 bg-[#fdcb6e]/5 p-4 text-sm text-gray-300">
             Discord import isn&apos;t switched on for this server yet. An AppChat admin needs to add the Discord bot settings
@@ -165,7 +178,10 @@ export default function DiscordImport({ tenantSlug }) {
                     <span className="text-xs text-gray-500 shrink-0">
                       {p?.state === 'running' && `Importing… ${p.count}`}
                       {p?.state === 'done' && (
-                        <Link href={`/${tenantSlug}/c/${p.channelId}`} className="text-[#00b894] hover:underline">{p.count} new · open</Link>
+                        <>
+                          <Link href={`/${tenantSlug}/c/${p.channelId}`} className="text-[#00b894] hover:underline">{p.count} new · open</Link>
+                          {p.blank > 0 && <span className="text-[#fdcb6e]"> · {p.blank} blank</span>}
+                        </>
                       )}
                       {p?.state === 'error' && <span className="text-red-400">{p.message}</span>}
                       {!p && (c.imported ? `${c.imported} already imported` : '')}

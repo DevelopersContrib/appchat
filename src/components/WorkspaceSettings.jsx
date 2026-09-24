@@ -266,6 +266,13 @@ function Tools({ tenantSlug }) {
   return (
     <section className="space-y-3">
       <h2 className="text-sm font-semibold">Import</h2>
+      <Link href={`/${tenantSlug}/import/vnoc`} className="flex items-center gap-3 rounded-xl border border-gray-800 p-4 hover:border-[#00b894]/60">
+        <span className="w-9 h-9 rounded-lg bg-[#00b894] flex items-center justify-center text-white font-bold">V</span>
+        <span>
+          <span className="block text-sm font-medium">Import VNOC teams</span>
+          <span className="block text-xs text-gray-400">Link channels to VNOC domains and add each domain’s team members.</span>
+        </span>
+      </Link>
       <Link href={`/${tenantSlug}/import/discord`} className="flex items-center gap-3 rounded-xl border border-gray-800 p-4 hover:border-[#5865F2]/60">
         <span className="w-9 h-9 rounded-lg bg-[#5865F2] flex items-center justify-center text-white font-bold">D</span>
         <span>

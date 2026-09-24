@@ -93,7 +93,7 @@ export default function ChannelView({ channel, initialMessages, members, current
       return true;
     }
     if (cmd === '/task') {
-      let domain = channel.tenant_domain;
+      let domain = channel.vnoc_domain || channel.tenant_domain;
       if (rest[0] && /^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(rest[0])) domain = rest.shift();
       const title = rest.join(' ');
       if (!title) {
@@ -279,7 +279,7 @@ export default function ChannelView({ channel, initialMessages, members, current
         open={sprintPanel.open}
         initialQuery={sprintPanel.query}
         onClose={() => setSprintPanel({ open: false, query: '' })}
-        defaultDomain={channel.tenant_domain}
+        defaultDomain={channel.vnoc_domain || channel.tenant_domain}
         channelId={channel.id}
       />
     </div>

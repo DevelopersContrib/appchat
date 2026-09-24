@@ -24,7 +24,8 @@ export async function POST(request) {
     const dc = guild.channels.find((c) => c.id === String(body.channelId));
     if (!dc) return NextResponse.json({ error: 'Channel not found in that server' }, { status: 404 });
 
-    const step = await importChannelStep(conn, { tenantId: admin.tenant_id, guild, dc, maxPages: 5 });
+    // Scan from the start (cursor '0') on the first call, then continue from the returned cursor.
+    const step = await importChannelStep(conn, { tenantId: admin.tenant_id, guild, dc, maxPages: 5, cursor: String(body.cursor || '0') });
     const total = Number(body.importedSoFar || 0) + step.imported;
     if (step.done && total > 0) {
       await conn.query(

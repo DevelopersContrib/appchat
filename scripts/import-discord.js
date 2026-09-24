@@ -36,10 +36,12 @@ let grandTotal = 0;
 for (const dc of channels) {
   let count = 0;
   let channelId = null;
+  let cursor = '0'; // full scan; already-imported messages are skipped
   try {
     for (;;) {
-      const step = await importChannelStep(db, { tenantId: tenant.id, guild, dc, userMap, emailToUserId, dryRun: opts.dryRun, maxPages: 20 });
+      const step = await importChannelStep(db, { tenantId: tenant.id, guild, dc, userMap, emailToUserId, dryRun: opts.dryRun, maxPages: 20, cursor });
       channelId = step.channelId;
+      cursor = step.cursor;
       count += step.imported;
       process.stdout.write(`\r  #${dc.name}: ${count} messages`);
       if (step.done || opts.dryRun) break;
