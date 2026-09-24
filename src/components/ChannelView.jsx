@@ -6,6 +6,8 @@ import MessageInput from './MessageInput.jsx';
 import SprintPanel from './SprintPanel.jsx';
 import ThreadPanel from './ThreadPanel.jsx';
 import { useRoster, PresenceDot, describePresence } from './presence.jsx';
+import { celebrate } from '@/lib/celebrate.js';
+import { isCelebration } from '@/lib/emoji-data.js';
 
 function mergeUniqueMessages(existing, incoming) {
   const map = new Map();
@@ -78,6 +80,10 @@ export default function ChannelView({ channel, initialMessages, members, current
       const { messages: fresh = [], changed = [], typing: typingNow = [], now } = await res.json();
       sinceRef.current = now;
       setTyping(typingNow);
+      if (fresh.some((m) => {
+        const card = typeof m.metadata === 'string' ? JSON.parse(m.metadata || '{}').card : m.metadata?.card;
+        return card?.kind === 'kudos' || isCelebration(m.body);
+      })) celebrate();
       if (fresh.length || changed.length) {
         setMessages((prev) => {
           const removed = new Set(changed.filter((m) => m.deleted).map((m) => m.id));
@@ -96,6 +102,15 @@ export default function ChannelView({ channel, initialMessages, members, current
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ emoji }),
+    });
+    if (res.ok) upsert(await res.json());
+  }
+
+  async function handleVote(msg, option) {
+    const res = await fetch(`/api/channels/${channel.id}/messages/${msg.id}/vote`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ option }),
     });
     if (res.ok) upsert(await res.json());
   }
@@ -162,6 +177,51 @@ export default function ChannelView({ channel, initialMessages, members, current
   // "/meet [title]" starts a Google Meet.
   async function runCommand(text) {
     const [cmd, ...rest] = text.trim().split(/\s+/);
+    if (cmd === '/poll') {
+      // /poll Question? | Option A | Option B
+      const parts = rest.join(' ').split('|').map((x) => x.trim()).filter(Boolean);
+      if (parts.length < 3) {
+        setCommandError('Usage: /poll Question? | Option A | Option B');
+        return true;
+      }
+      const res = await fetch(`/api/channels/${channel.id}/polls`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: parts[0], options: parts.slice(1) }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) upsert(data);
+      else setCommandError(data.error || 'Could not create the poll');
+      return true;
+    }
+    if (cmd === '/kudos') {
+      // /kudos @Full Name for something great
+      const text = rest.join(' ').replace(/^@/, '');
+      const people = [...(roster?.members || [])].sort((a, b) => b.name.length - a.name.length);
+      const person = people.find((m) => text.toLowerCase().startsWith(m.name.toLowerCase()))
+        || people.find((m) => text.toLowerCase().startsWith(m.email.split('@')[0].toLowerCase()));
+      if (!person) {
+        setCommandError('Usage: /kudos @Name for something great');
+        return true;
+      }
+      const reason = text.slice(text.toLowerCase().startsWith(person.name.toLowerCase()) ? person.name.length : person.email.split('@')[0].length)
+        .trim().replace(/^for\s+/i, '');
+      const res = await fetch(`/api/channels/${channel.id}/kudos`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: person.id, reason }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        upsert(data);
+        celebrate('kudos');
+      } else setCommandError(data.error || 'Could not send kudos');
+      return true;
+    }
+    if (cmd === '/gif') {
+      inputRef.current?.openGifs(rest.join(' '));
+      return true;
+    }
     if (cmd === '/meet') {
       await startMeet({ title: rest.join(' ') || undefined });
       return true;
@@ -244,6 +304,7 @@ export default function ChannelView({ channel, initialMessages, members, current
 
     if (res.ok) {
       const msg = await res.json();
+      if (isCelebration(msg.body)) celebrate();
       setMessages((prev) => {
         const withoutTemp = prev.filter((m) => m.id !== tempId);
         return mergeUniqueMessages(withoutTemp, [msg]);
@@ -311,7 +372,7 @@ export default function ChannelView({ channel, initialMessages, members, current
                 className="font-semibold hover:underline text-left"
                 title="Channel settings"
               >
-                <span className="text-gray-500">{channel.is_private ? '🔒' : '#'}</span> {channel.name}
+                <span className="text-gray-500">{channel.emoji || (channel.is_private ? '🔒' : '#')}</span> {channel.name}
               </button>
               {channel.description && (
                 <p className="text-xs text-gray-500 truncate">{channel.description}</p>
@@ -392,12 +453,17 @@ export default function ChannelView({ channel, initialMessages, members, current
         loadingEarlier={loadingEarlier}
         onLoadEarlier={loadEarlier}
         canModerate={canModerate}
-        actions={{ onReact: handleReact, onReply: handleReply, onThread: (m) => setThreadFor(m.id), onEdit: handleEdit, onDelete: handleDelete }}
+        actions={{ onReact: handleReact, onReply: handleReply, onThread: (m) => setThreadFor(m.id), onEdit: handleEdit, onDelete: handleDelete, onVote: handleVote }}
       />
-      <p className="px-5 h-4 text-[11px] text-gray-500" aria-live="polite">
-        {typing.length === 1 && `${typing[0]} is typing…`}
-        {typing.length === 2 && `${typing[0]} and ${typing[1]} are typing…`}
-        {typing.length > 2 && 'Several people are typing…'}
+      <p className="px-5 h-4 text-[11px] text-gray-500 flex items-center gap-1.5" aria-live="polite">
+        {typing.length > 0 && (
+          <span className="inline-flex gap-0.5 text-gray-400" aria-hidden="true">
+            <span className="typing-dot" /><span className="typing-dot" /><span className="typing-dot" />
+          </span>
+        )}
+        {typing.length === 1 && `${typing[0]} is typing`}
+        {typing.length === 2 && `${typing[0]} and ${typing[1]} are typing`}
+        {typing.length > 2 && 'Several people are typing'}
       </p>
       {commandError && (
         <p className="px-5 pb-1 text-xs text-red-400">{commandError}</p>

@@ -17,7 +17,7 @@ export async function hydrateMessages(messages, viewerId) {
   const ids = messages.map((m) => m.id);
   const ph = ids.map(() => '?').join(',');
 
-  const [attachments, reactions, threadStats] = await Promise.all([
+  const [attachments, reactions, threadStats, votes] = await Promise.all([
     query(`SELECT * FROM message_attachments WHERE message_id IN (${ph})`, ids),
     query(
       `SELECT r.message_id, r.emoji, r.user_id, COALESCE(NULLIF(u.name, ''), u.email) AS name
@@ -30,6 +30,7 @@ export async function hydrateMessages(messages, viewerId) {
        FROM messages WHERE thread_id IN (${ph}) AND deleted_at IS NULL GROUP BY thread_id`,
       ids
     ),
+    query(`SELECT message_id, user_id, option_index FROM poll_votes WHERE message_id IN (${ph})`, ids),
   ]);
 
   const replyToIds = [...new Set(messages.map((m) => m.reply_to_id).filter(Boolean))];
@@ -46,6 +47,7 @@ export async function hydrateMessages(messages, viewerId) {
   const reactBy = group(reactions, 'message_id');
   const threadBy = Object.fromEntries(threadStats.map((t) => [t.thread_id, t]));
   const quoteBy = Object.fromEntries(quoted.map((q) => [q.id, q]));
+  const votesBy = group(votes, 'message_id');
 
   for (const m of messages) {
     m.attachments = attachBy[m.id] || [];
@@ -57,6 +59,16 @@ export async function hydrateMessages(messages, viewerId) {
       if (r.user_id === viewerId) e.mine = true;
     }
     m.reactions = Object.values(byEmoji);
+    const card = parseMeta(m.metadata).card;
+    if (card?.kind === 'poll') {
+      const counts = card.options.map(() => 0);
+      let myVote = null;
+      for (const v of votesBy[m.id] || []) {
+        if (counts[v.option_index] !== undefined) counts[v.option_index]++;
+        if (v.user_id === viewerId) myVote = v.option_index;
+      }
+      m.poll = { counts, total: counts.reduce((a, b) => a + b, 0), myVote };
+    }
     m.reply_count = Number(threadBy[m.id]?.reply_count || 0);
     m.last_reply_at = threadBy[m.id]?.last_reply_at || null;
     if (m.reply_to_id) {

@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
 import DrivePicker from './DrivePicker.jsx';
 import { useRoster } from './presence.jsx';
+import { EMOJI_GROUPS, suggestShortcodes } from '@/lib/emoji-data.js';
 
 const TYPING_PING_MS = 3000;
 
@@ -26,6 +27,10 @@ const MessageInput = forwardRef(function MessageInput(
 ) {
   const [body, setBody] = useState('');
   const [mention, setMention] = useState(null); // { query, start, index }
+  const [shortcode, setShortcode] = useState(null); // { query, start, index }
+  const [panel, setPanel] = useState(null); // 'emoji' | 'gif'
+  const [gifQuery, setGifQuery] = useState('');
+  const [gifs, setGifs] = useState(null);
   const lastTypingPing = useRef(0);
   const roster = useRoster();
   const [sending, setSending] = useState(false);
@@ -38,7 +43,11 @@ const MessageInput = forwardRef(function MessageInput(
   const fileRef = useRef(null);
   const uploading = pendingAttachments.some((a) => a.uploading);
 
-  useImperativeHandle(ref, () => ({ addFiles: uploadFiles, focus: () => inputRef.current?.focus() }));
+  useImperativeHandle(ref, () => ({
+    addFiles: uploadFiles,
+    focus: () => inputRef.current?.focus(),
+    openGifs: (q = '') => { setGifQuery(q); setPanel('gif'); },
+  }));
 
   // Editing loads the message text into the box.
   useEffect(() => {
@@ -65,11 +74,49 @@ const MessageInput = forwardRef(function MessageInput(
     const caret = e.target.selectionStart ?? value.length;
     const m = /(^|\s)@([\p{L}\p{N}_.-]*)$/u.exec(value.slice(0, caret));
     setMention(m ? { query: m[2].toLowerCase(), start: caret - m[2].length - 1, index: 0 } : null);
+    // ":ta" → emoji suggestions.
+    const sc = /(^|\s):([a-z0-9_+-]{2,})$/i.exec(value.slice(0, caret));
+    setShortcode(sc && !m ? { query: sc[2], start: caret - sc[2].length - 1, index: 0 } : null);
     // Let others see "typing…" (throttled).
     if (value.trim() && Date.now() - lastTypingPing.current > TYPING_PING_MS && channelId && !editing) {
       lastTypingPing.current = Date.now();
       fetch(`/api/channels/${channelId}/typing`, { method: 'POST' }).catch(() => {});
     }
+  }
+
+  const shortcodeOptions = shortcode ? suggestShortcodes(shortcode.query) : [];
+
+  function insertAtCaret(text, replaceFrom) {
+    const el = inputRef.current;
+    const caret = el?.selectionStart ?? body.length;
+    const from = replaceFrom ?? caret;
+    const next = body.slice(0, from) + text + body.slice(caret);
+    setBody(next);
+    setTimeout(() => {
+      el?.focus();
+      const pos = from + text.length;
+      el?.setSelectionRange(pos, pos);
+    }, 0);
+  }
+
+  function pickShortcode([, emoji]) {
+    insertAtCaret(`${emoji} `, shortcode.start);
+    setShortcode(null);
+  }
+
+  // GIF picker: trending on open, search as you type (GIPHY; hidden when not configured).
+  useEffect(() => {
+    if (panel !== 'gif') return;
+    const t = setTimeout(() => {
+      fetch(`/api/gifs?q=${encodeURIComponent(gifQuery)}`).then((r) => r.json()).then((d) => setGifs(d)).catch(() => setGifs({ enabled: false, gifs: [] }));
+    }, 250);
+    return () => clearTimeout(t);
+  }, [panel, gifQuery]);
+
+  async function sendGif(g) {
+    setPanel(null);
+    setGifQuery('');
+    await onSend('', [{ type: 'file', title: g.title || 'GIF', url: g.url, mimeType: 'image/gif' }]);
   }
 
   function pickMention(member) {
@@ -141,6 +188,8 @@ const MessageInput = forwardRef(function MessageInput(
 
     setSending(true);
     setMention(null);
+    setShortcode(null);
+    setPanel(null);
     await onSend(body, ready.length ? ready : undefined);
     lastTypingPing.current = 0;
     setBody('');
@@ -150,6 +199,23 @@ const MessageInput = forwardRef(function MessageInput(
   }
 
   function handleKeyDown(e) {
+    if (shortcode && shortcodeOptions.length) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        const d = e.key === 'ArrowDown' ? 1 : -1;
+        setShortcode((m) => ({ ...m, index: (m.index + d + shortcodeOptions.length) % shortcodeOptions.length }));
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        pickShortcode(shortcodeOptions[shortcode.index] || shortcodeOptions[0]);
+        return;
+      }
+      if (e.key === 'Escape') {
+        setShortcode(null);
+        return;
+      }
+    }
     if (mention && mentionOptions.length) {
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         e.preventDefault();
@@ -219,6 +285,56 @@ const MessageInput = forwardRef(function MessageInput(
       {showDrive && <DrivePicker onSelect={handleDriveSelect} onClose={() => setShowDrive(false)} />}
 
       <form onSubmit={handleSubmit} className={`relative ${compact ? 'px-3' : 'px-3 md:px-5'} py-3 border-t border-gray-800`}>
+        {shortcode && shortcodeOptions.length > 0 && (
+          <ul className="absolute left-3 right-3 md:left-5 md:right-auto md:w-72 bottom-full mb-1 z-30 rounded-xl border border-gray-700 bg-gray-900 shadow-2xl py-1" role="listbox">
+            {shortcodeOptions.map((opt, i) => (
+              <li key={opt[0]}>
+                <button
+                  type="button"
+                  onMouseDown={(e) => { e.preventDefault(); pickShortcode(opt); }}
+                  className={`w-full flex items-center gap-2 px-3 py-1.5 text-left text-sm ${i === shortcode.index ? 'bg-gray-800' : 'hover:bg-gray-800/60'}`}
+                >
+                  <span className="text-lg">{opt[1]}</span>
+                  <span className="text-gray-300">:{opt[0]}:</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {panel === 'emoji' && (
+          <div className="absolute left-3 md:left-5 bottom-full mb-1 z-30 w-[min(22rem,calc(100vw-1.5rem))] max-h-72 overflow-y-auto rounded-xl border border-gray-700 bg-gray-900 shadow-2xl p-2">
+            {EMOJI_GROUPS.map(([group, list]) => (
+              <div key={group} className="mb-1">
+                <p className="px-1 text-[10px] uppercase tracking-wide text-gray-500">{group}</p>
+                <div className="grid grid-cols-8">
+                  {list.split(' ').map((e) => (
+                    <button key={e} type="button" onClick={() => insertAtCaret(e)} className="h-9 rounded hover:bg-gray-800 text-xl">{e}</button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        {panel === 'gif' && (
+          <div className="absolute left-3 right-3 md:left-5 md:right-auto md:w-[26rem] bottom-full mb-1 z-30 rounded-xl border border-gray-700 bg-gray-900 shadow-2xl p-2">
+            <input
+              autoFocus
+              value={gifQuery}
+              onChange={(e) => setGifQuery(e.target.value)}
+              placeholder="Search GIFs"
+              className="w-full mb-2 px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-base md:text-sm focus:outline-none"
+            />
+            {gifs && !gifs.enabled && <p className="p-3 text-xs text-gray-400">GIFs aren’t set up on this server yet (needs a GIPHY key).</p>}
+            <div className="grid grid-cols-3 gap-1 max-h-64 overflow-y-auto">
+              {gifs?.gifs?.map((g) => (
+                <button key={g.id} type="button" onClick={() => sendGif(g)} className="rounded overflow-hidden bg-gray-800 hover:ring-2 hover:ring-[#00b894]">
+                  <img src={g.preview} alt={g.title} loading="lazy" className="w-full h-24 object-cover" />
+                </button>
+              ))}
+            </div>
+            {gifs?.enabled && <p className="mt-1 text-[9px] text-right text-gray-600">Powered by GIPHY</p>}
+          </div>
+        )}
         {mention && mentionOptions.length > 0 && (
           <ul className="absolute left-3 right-3 md:left-5 md:right-auto md:w-80 bottom-full mb-1 z-30 rounded-xl border border-gray-700 bg-gray-900 shadow-2xl py-1" role="listbox">
             {mentionOptions.map((m, i) => (
@@ -313,6 +429,24 @@ const MessageInput = forwardRef(function MessageInput(
             className="hidden"
             onChange={(e) => { uploadFiles(e.target.files); e.target.value = ''; }}
           />
+          <button
+            type="button"
+            onClick={() => setPanel((p) => (p === 'emoji' ? null : 'emoji'))}
+            className={`transition p-1 text-lg leading-none ${panel === 'emoji' ? 'text-[#fdcb6e]' : 'text-gray-500 hover:text-[#fdcb6e]'}`}
+            title="Emoji"
+            aria-label="Emoji"
+          >
+            😊
+          </button>
+          <button
+            type="button"
+            onClick={() => setPanel((p) => (p === 'gif' ? null : 'gif'))}
+            className={`transition px-1 text-[10px] font-bold border rounded ${panel === 'gif' ? 'text-[#fdcb6e] border-[#fdcb6e]' : 'text-gray-500 border-gray-600 hover:text-[#fdcb6e] hover:border-[#fdcb6e]'}`}
+            title="GIF"
+            aria-label="GIF"
+          >
+            GIF
+          </button>
           <button
             type="button"
             onClick={() => fileRef.current?.click()}

@@ -221,7 +221,7 @@ export default function Sidebar({ tenant, channels, dms: initialDms = [], user, 
           const unread = roster.unread[ch.id] || 0;
           return (
             <Link key={ch.id} href={href} className={rowClass(active, unread)} {...menuHandlers('channel', { id: ch.id, name: ch.name })}>
-              <span className="text-gray-600 w-3 text-center shrink-0">{ch.is_private ? '🔒' : '#'}</span>
+              <span className={`text-center shrink-0 ${ch.emoji ? 'w-4' : 'w-3 text-gray-600'}`}>{ch.emoji || (ch.is_private ? '🔒' : '#')}</span>
               <span className="truncate">{ch.name}</span>
               {unread > 0 && !active && <UnreadBadge count={unread} />}
               {moreButton('channel', { id: ch.id, name: ch.name })}

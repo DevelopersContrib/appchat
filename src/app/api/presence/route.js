@@ -72,7 +72,8 @@ export async function GET(request) {
             (p.tenant_id = ? AND p.updated_at > NOW() - INTERVAL ${ONLINE_WINDOW_SECONDS} SECOND) AS online,
             c.id AS channel_id, c.name AS channel_name, c.is_dm, c.is_private,
             (SELECT 1 FROM channel_members v WHERE v.channel_id = c.id AND v.user_id = ?) AS viewer_in_channel,
-            r.name AS room_name
+            r.name AS room_name,
+            (SELECT COUNT(*) FROM kudos k WHERE k.tenant_id = tm.tenant_id AND k.to_user_id = u.id) AS kudos
      FROM tenant_members tm
      JOIN users u ON u.id = tm.user_id
      LEFT JOIN user_presence p ON p.user_id = u.id
@@ -106,6 +107,7 @@ export async function GET(request) {
       timezone: r.timezone,
       lastSeenAt: r.last_seen_at,
       contribUrl: contribProfileUrl(r.contrib_username),
+      kudos: Number(r.kudos || 0),
     };
   });
 

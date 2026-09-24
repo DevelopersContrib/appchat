@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import LinkPreview from './LinkPreview.jsx';
+import { isEmojiOnly } from '@/lib/emoji-data.js';
 
 export const QUICK_REACTIONS = ['👍', '❤️', '😂', '🎉', '👀', '✅'];
 export const MORE_REACTIONS = ['🔥', '🙏', '💯', '😮', '😢', '😡', '🚀', '👏', '🤔', '💡', '⚡', '🙌', '😍', '😅', '👌', '❌', '⭐', '☕'];
@@ -44,7 +45,9 @@ export function parseMetadata(metadata) {
 }
 
 // Bold any "@word" so mentions stand out; the viewer's own mentions are highlighted.
+// Messages that are just 1–3 emoji are shown big.
 function MessageBody({ text, myNames }) {
+  if (isEmojiOnly(text)) return <p className="text-4xl leading-tight py-0.5 bounce-in">{text}</p>;
   const parts = String(text).split(/(@[\p{L}\p{N}_.-]+)/u);
   return (
     <p className="text-sm text-gray-300 break-words whitespace-pre-wrap">
@@ -70,6 +73,9 @@ export default function MessageList({ messages, currentUser, hasEarlier, loading
   const [pickerFor, setPickerFor] = useState(null);
   const [sheetFor, setSheetFor] = useState(null);
   const pressTimer = useRef(null);
+  // Messages present on first render don't animate in; later ones slide in.
+  const initialIds = useRef(null);
+  if (initialIds.current === null) initialIds.current = new Set(messages.map((m) => m.id));
   const myNames = useMemo(() => {
     const n = [currentUser?.name, currentUser?.name?.split(' ')[0], currentUser?.email?.split('@')[0], 'channel', 'here', 'everyone'];
     return n.filter(Boolean).map((x) => x.toLowerCase());
@@ -187,7 +193,7 @@ export default function MessageList({ messages, currentUser, hasEarlier, loading
             {showDate && <DateDivider date={msgDate} />}
             <div
               id={`msg-${msg.id}`}
-              className={`group relative flex gap-3 rounded px-2 ${compact ? 'py-0.5' : 'py-2 mt-2'} ${msg.id === focusId ? 'bg-[#8b93ff]/15 ring-1 ring-[#8b93ff]/50' : mentionsMe ? 'bg-[#fdcb6e]/5 border-l-2 border-[#fdcb6e]/60' : 'hover:bg-gray-800/50'}`}
+              className={`group relative flex gap-3 rounded px-2 ${initialIds.current.has(msg.id) ? '' : 'msg-in'} ${compact ? 'py-0.5' : 'py-2 mt-2'} ${msg.id === focusId ? 'bg-[#8b93ff]/15 ring-1 ring-[#8b93ff]/50' : mentionsMe ? 'bg-[#fdcb6e]/5 border-l-2 border-[#fdcb6e]/60' : 'hover:bg-gray-800/50'}`}
               onTouchStart={() => { if (canAct(msg)) pressTimer.current = setTimeout(() => setSheetFor(msg), 450); }}
               onTouchEnd={() => clearTimeout(pressTimer.current)}
               onTouchMove={() => clearTimeout(pressTimer.current)}
@@ -217,7 +223,9 @@ export default function MessageList({ messages, currentUser, hasEarlier, loading
                     ↪ <span className="text-gray-300">{replyTo.author}</span> {replyTo.excerpt}
                   </p>
                 )}
-                {meta.card?.kind === 'debrief' ? <DebriefCard card={meta.card} /> : meta.card?.kind === 'meet' ? <MeetCard card={meta.card} /> : meta.card ? <VnocCard card={meta.card} /> : !(msg.body === 'Shared attachment' && msg.attachments?.length) && (
+                {meta.card?.kind === 'poll' ? <PollCard card={meta.card} poll={msg.poll} onVote={(i) => actions.onVote?.(msg, i)} />
+                  : meta.card?.kind === 'kudos' ? <KudosCard card={meta.card} />
+                  : meta.card?.kind === 'debrief' ? <DebriefCard card={meta.card} /> : meta.card?.kind === 'meet' ? <MeetCard card={meta.card} /> : meta.card ? <VnocCard card={meta.card} /> : !(msg.body === 'Shared attachment' && msg.attachments?.length) && (
                   <MessageBody text={msg.body} myNames={myNames} />
                 )}
                 {msg.edited_at && <span className="text-[10px] text-gray-600">(edited)</span>}
@@ -228,10 +236,10 @@ export default function MessageList({ messages, currentUser, hasEarlier, loading
                   <div className="flex flex-wrap gap-1 mt-1">
                     {msg.reactions.map((r) => (
                       <button
-                        key={r.emoji}
+                        key={`${r.emoji}-${r.count}`}
                         onClick={() => actions.onReact?.(msg, r.emoji)}
                         title={r.names?.join(', ')}
-                        className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-xs ${r.mine ? 'border-[#00b894]/60 bg-[#00b894]/15 text-white' : 'border-gray-700 bg-gray-800/60 text-gray-300 hover:border-gray-500'}`}
+                        className={`reaction-pop flex items-center gap-1 px-1.5 py-0.5 rounded-full border text-xs ${r.mine ? 'border-[#00b894]/60 bg-[#00b894]/15 text-white' : 'border-gray-700 bg-gray-800/60 text-gray-300 hover:border-gray-500'}`}
                       >
                         <span>{r.emoji}</span>
                         <span>{r.count}</span>
@@ -312,6 +320,47 @@ function SheetItem({ children, onClick, danger }) {
     <button onClick={onClick} className={`w-full text-left px-4 py-3 rounded-xl bg-gray-800/60 text-sm ${danger ? 'text-red-400' : 'text-gray-100'}`}>
       {children}
     </button>
+  );
+}
+
+function PollCard({ card, poll, onVote }) {
+  const counts = poll?.counts || card.options.map(() => 0);
+  const total = poll?.total || 0;
+  return (
+    <div className="mt-1 max-w-md rounded-xl border border-gray-700 bg-gray-900/70 p-3">
+      <p className="text-[10px] uppercase tracking-wide text-[#fdcb6e]">📊 Poll</p>
+      <p className="text-sm font-semibold text-gray-100 mb-2">{card.question}</p>
+      <div className="space-y-1.5">
+        {card.options.map((opt, i) => {
+          const pct = total ? Math.round((counts[i] / total) * 100) : 0;
+          const mine = poll?.myVote === i;
+          return (
+            <button
+              key={i}
+              onClick={() => onVote(i)}
+              className={`relative w-full overflow-hidden rounded-lg border text-left text-sm px-3 py-2 transition ${mine ? 'border-[#00b894]' : 'border-gray-700 hover:border-gray-500'}`}
+            >
+              <span className={`absolute inset-y-0 left-0 transition-all duration-500 ${mine ? 'bg-[#00b894]/25' : 'bg-gray-700/40'}`} style={{ width: `${pct}%` }} />
+              <span className="relative flex items-center gap-2">
+                <span className="text-gray-100">{mine ? '✓ ' : ''}{opt}</span>
+                <span className="ml-auto text-xs text-gray-400">{counts[i]} · {pct}%</span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      <p className="mt-2 text-[11px] text-gray-500">{total} {total === 1 ? 'vote' : 'votes'} · tap again to remove your vote</p>
+    </div>
+  );
+}
+
+function KudosCard({ card }) {
+  return (
+    <div className="mt-1 max-w-md rounded-xl border border-[#fdcb6e]/40 bg-gradient-to-r from-[#fdcb6e]/15 via-[#d63031]/10 to-[#6c5ce7]/15 px-4 py-3 bounce-in">
+      <p className="text-2xl">🙌</p>
+      <p className="text-sm font-semibold text-gray-100">Kudos to {card.toName}!</p>
+      {card.reason && <p className="text-sm text-gray-300">for {card.reason}</p>}
+    </div>
   );
 }
 

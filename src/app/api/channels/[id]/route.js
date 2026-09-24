@@ -30,6 +30,7 @@ export async function GET(request, { params }) {
     description: c.description,
     isPrivate: Boolean(c.is_private),
     isDm: Boolean(c.is_dm),
+    emoji: c.emoji || '',
     archived: Boolean(c.archived_at),
     createdBy: c.created_by,
     isMember: access.isMember,
@@ -58,8 +59,12 @@ export async function PATCH(request, { params }) {
   }
   const description = b.description !== undefined ? sanitizeString(b.description, 500) : c.description;
   const isPrivate = b.isPrivate !== undefined ? Boolean(b.isPrivate) : Boolean(c.is_private);
+  // One emoji (no letters/digits), or empty to clear.
+  const emoji = b.emoji !== undefined
+    ? (typeof b.emoji === 'string' && b.emoji.length <= 16 && !/[\p{L}\p{N}\s<>]/u.test(b.emoji) ? b.emoji || null : c.emoji)
+    : c.emoji;
 
-  await query('UPDATE channels SET name = ?, description = ?, is_private = ? WHERE id = ?', [name, description, isPrivate ? 1 : 0, c.id]);
+  await query('UPDATE channels SET name = ?, description = ?, is_private = ?, emoji = ? WHERE id = ?', [name, description, isPrivate ? 1 : 0, emoji, c.id]);
   // Making a channel public lets everyone in the workspace in.
   if (!isPrivate && c.is_private) {
     await query(

@@ -183,6 +183,7 @@ export function ChannelSettingsDialog({ channelId, tenantSlug, onClose }) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [isPrivate, setIsPrivate] = useState(false);
+  const [emoji, setEmoji] = useState('');
   const [adding, setAdding] = useState([]);
   const [showAdd, setShowAdd] = useState(false);
   const [error, setError] = useState('');
@@ -195,6 +196,7 @@ export function ChannelSettingsDialog({ channelId, tenantSlug, onClose }) {
         setName(d.name);
         setDescription(d.description || '');
         setIsPrivate(d.isPrivate);
+        setEmoji(d.emoji || '');
       })
       .catch((e) => setError(e.message));
 
@@ -211,7 +213,7 @@ export function ChannelSettingsDialog({ channelId, tenantSlug, onClose }) {
     }
   }
 
-  const save = () => run(() => api(`/api/channels/${channelId}`, json('PATCH', { name, description, isPrivate })), () => { setSaved('Saved'); router.refresh(); load(); });
+  const save = () => run(() => api(`/api/channels/${channelId}`, json('PATCH', { name, description, isPrivate, emoji })), () => { setSaved('Saved'); router.refresh(); load(); });
   const addPeople = () => run(() => api(`/api/channels/${channelId}/members`, json('POST', { userIds: adding })), () => { setAdding([]); setShowAdd(false); load(); });
   const remove = (userId) => run(() => api(`/api/channels/${channelId}/members?userId=${userId}`, { method: 'DELETE' }), load);
   const leave = () => run(() => api(`/api/channels/${channelId}/members`, { method: 'DELETE' }), (d) => { onClose(); router.push(d.url); router.refresh(); });
@@ -227,10 +229,32 @@ export function ChannelSettingsDialog({ channelId, tenantSlug, onClose }) {
       {info && (
         <div className="space-y-6">
           <section className="space-y-3">
-            <div>
-              <label className="text-xs text-gray-400">Name</label>
-              <input value={name} onChange={(e) => setName(e.target.value)} disabled={!info.canManage} className={`${input} mt-1 disabled:opacity-60`} />
+            <div className="flex gap-2">
+              <div className="w-20">
+                <label className="text-xs text-gray-400">Icon</label>
+                <input
+                  value={emoji}
+                  onChange={(e) => setEmoji(e.target.value.trim())}
+                  disabled={!info.canManage}
+                  placeholder="#"
+                  maxLength={8}
+                  className={`${input} mt-1 text-center text-xl disabled:opacity-60`}
+                  aria-label="Channel emoji"
+                />
+              </div>
+              <div className="flex-1">
+                <label className="text-xs text-gray-400">Name</label>
+                <input value={name} onChange={(e) => setName(e.target.value)} disabled={!info.canManage} className={`${input} mt-1 disabled:opacity-60`} />
+              </div>
             </div>
+            {info.canManage && (
+              <div className="flex flex-wrap gap-1">
+                {['🚀', '💬', '📣', '🏠', '💡', '🛠️', '🎨', '📈', '🎉', '🧠', '🌍', '☕'].map((e) => (
+                  <button key={e} type="button" onClick={() => setEmoji(e)} className={`w-8 h-8 rounded-lg text-lg ${emoji === e ? 'bg-gray-700' : 'hover:bg-gray-800'}`}>{e}</button>
+                ))}
+                {emoji && <button type="button" onClick={() => setEmoji('')} className="px-2 h-8 rounded-lg text-xs text-gray-400 hover:bg-gray-800">Clear</button>}
+              </div>
+            )}
             <div>
               <label className="text-xs text-gray-400">Topic</label>
               <input value={description} onChange={(e) => setDescription(e.target.value)} disabled={!info.canManage} className={`${input} mt-1 disabled:opacity-60`} />

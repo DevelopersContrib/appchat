@@ -167,6 +167,7 @@ function ProfileCard({ member: m, isMe, busy, onMessage, onClose }) {
               {['owner', 'admin'].includes(m.role) && <span className="text-[10px] uppercase px-1.5 rounded bg-[#fdcb6e]/15 text-[#fdcb6e]">{m.role}</span>}
             </p>
             <p className="text-sm text-gray-400">{m.email}</p>
+            {m.kudos > 0 && <p className="mt-1 text-sm text-[#fdcb6e]">🙌 {m.kudos} kudos</p>}
           </div>
           <div className="rounded-xl bg-gray-950 border border-gray-800 p-3 text-sm space-y-1">
             <p className="text-gray-200">{m.online ? (m.status === 'away' ? 'Away' : m.where?.label || 'Online') : 'Offline'}</p>
