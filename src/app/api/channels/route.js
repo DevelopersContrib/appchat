@@ -42,10 +42,18 @@ export async function POST(request) {
       [membership.tenant_id, name, description || '', isPrivate ? 1 : 0, user.id]
     );
 
-    await insert(
-      'INSERT INTO channel_members (channel_id, user_id) VALUES (?, ?)',
-      [channelId, user.id]
-    );
+    if (isPrivate) {
+      await insert(
+        'INSERT INTO channel_members (channel_id, user_id) VALUES (?, ?)',
+        [channelId, user.id]
+      );
+    } else {
+      await query(
+        `INSERT IGNORE INTO channel_members (channel_id, user_id)
+         SELECT ?, user_id FROM tenant_members WHERE tenant_id = ?`,
+        [channelId, membership.tenant_id]
+      );
+    }
 
     await insert(
       'INSERT INTO messages (channel_id, body, type) VALUES (?, ?, ?)',

@@ -8,7 +8,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "db:migrate": "node migrations/run.js"
+    "db:migrate": "node migrations/run.js",
+    "import:discord": "node --env-file=.env.local scripts/import-discord.js",
+    "team:member": "node --env-file=.env.local scripts/team-member.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.100.1",

@@ -14,7 +14,8 @@ async function getMagicClient() {
   return magicClient;
 }
 
-export async function authenticateWithMagic(didToken, { adminOnly = false } = {}) {
+// membersOnly: only platform admins or people already added to a workspace may sign in.
+export async function authenticateWithMagic(didToken, { adminOnly = false, membersOnly = false } = {}) {
   const magic = await getMagicClient();
   magic.token.validate(didToken);
   const metadata = await magic.users.getMetadataByToken(didToken);
@@ -24,9 +25,13 @@ export async function authenticateWithMagic(didToken, { adminOnly = false } = {}
     user = await queryOne('SELECT * FROM users WHERE email = ?', [metadata.email]);
   }
 
-  if (adminOnly) {
-    if (!user || !user.is_admin) {
-      throw new Error('Admin access required');
+  if (adminOnly || membersOnly) {
+    const allowed = user && (user.is_admin || (membersOnly && await queryOne(
+      'SELECT 1 FROM tenant_members WHERE user_id = ? LIMIT 1',
+      [user.id]
+    )));
+    if (!allowed) {
+      throw new Error(adminOnly ? 'Admin access required' : 'Not a team member');
     }
 
     await query(

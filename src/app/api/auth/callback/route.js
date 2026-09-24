@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { authenticateWithMagic } from '@/lib/auth.js';
 import { rateLimit, getClientIp } from '@/lib/security.js';
+import { tenantSlugForHost } from '@/lib/hosts.js';
 
 export async function POST(request) {
   const ip = getClientIp(request);
@@ -14,9 +15,9 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 400 });
     }
 
-    const { user, token } = await authenticateWithMagic(didToken, { adminOnly: true });
+    const { user, token } = await authenticateWithMagic(didToken, { membersOnly: true });
 
-    const redirectTo = '/dashboard';
+    const redirectTo = tenantSlugForHost(request.headers.get('host')) ? '/' : '/dashboard';
 
     const res = NextResponse.json({ user: { id: user.id, email: user.email }, redirectTo });
     res.cookies.set('appchat_session', token, {
@@ -29,10 +30,11 @@ export async function POST(request) {
 
     return res;
   } catch (err) {
-    const isForbidden = err?.message === 'Admin access required';
+    const isForbidden = err?.message === 'Admin access required' || err?.message === 'Not a team member';
     return NextResponse.json(
-      { error: isForbidden ? 'Admin access required' : 'Authentication failed' },
+      { error: isForbidden ? 'This email has not been invited. Ask an admin to add you.' : 'Authentication failed' },
       { status: isForbidden ? 403 : 401 }
     );
   }
 }
+

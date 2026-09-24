@@ -24,14 +24,27 @@ export async function GET(request, { params }) {
                WHERE m.channel_id = ?`;
     const params2 = [channelId];
 
-    if (after) {
-      sql += ' AND m.id > ?';
-      params2.push(after);
+    const before = request.nextUrl.searchParams.get('before');
+
+    let messages;
+    if (before) {
+      const cursor = await queryOne('SELECT created_at, id FROM messages WHERE id = ? AND channel_id = ?', [before, channelId]);
+      if (!cursor) return NextResponse.json([]);
+      sql += ` AND (m.created_at < ? OR (m.created_at = ? AND m.id < ?))
+               ORDER BY m.created_at DESC, m.id DESC LIMIT 100`;
+      params2.push(cursor.created_at, cursor.created_at, cursor.id);
+      messages = (await query(sql, params2)).reverse();
+    } else if (after) {
+      // Only live messages: skip back-dated rows (e.g. a Discord import running now) that are older than the cursor.
+      sql += ` AND m.id > ?
+               AND m.created_at >= COALESCE((SELECT created_at FROM messages WHERE id = ? AND channel_id = ?), '1970-01-01')
+               ORDER BY m.id ASC LIMIT 100`;
+      params2.push(after, after, channelId);
+      messages = await query(sql, params2);
+    } else {
+      sql += ' ORDER BY m.created_at DESC, m.id DESC LIMIT 100';
+      messages = (await query(sql, params2)).reverse();
     }
-
-    sql += ' ORDER BY m.created_at ASC LIMIT 100';
-
-    const messages = await query(sql, params2);
 
     if (messages.length) {
       const msgIds = messages.map(m => m.id);

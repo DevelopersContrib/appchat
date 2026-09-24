@@ -1,5 +1,6 @@
 import './globals.css';
 import '@livekit/components-styles';
+import PwaRegister from '@/components/PwaRegister.jsx';
 
 export const metadata = {
   metadataBase: new URL('https://appchat.com'),
@@ -15,6 +16,9 @@ export const metadata = {
     capable: true,
     statusBarStyle: 'black-translucent',
     title: 'AppChat',
+  },
+  icons: {
+    apple: '/pwa/apple-touch-icon.png',
   },
   formatDetection: {
     telephone: false,
@@ -41,6 +45,10 @@ export const metadata = {
 
 export const viewport = {
   themeColor: '#0a0a0f',
+  width: 'device-width',
+  initialScale: 1,
+  // Let the app draw under the notch/home bar when installed; layouts pad with env(safe-area-inset-*).
+  viewportFit: 'cover',
 };
 
 export default function RootLayout({ children }) {
@@ -77,6 +85,7 @@ export default function RootLayout({ children }) {
           }}
         />
         {children}
+        <PwaRegister />
       </body>
     </html>
   );

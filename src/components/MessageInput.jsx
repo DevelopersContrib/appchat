@@ -69,7 +69,7 @@ export default function MessageInput({ onSend }) {
     <>
       {showDrive && <DrivePicker onSelect={handleDriveSelect} onClose={() => setShowDrive(false)} />}
 
-      <form onSubmit={handleSubmit} className="px-5 py-3 border-t border-gray-800">
+      <form onSubmit={handleSubmit} className="px-3 md:px-5 py-3 border-t border-gray-800">
         {showLink && (
           <div className="mb-3 p-3 rounded-xl border border-gray-700 bg-gray-900/70">
             <p className="text-xs text-gray-400 mb-2">Share URL / presentation link</p>
@@ -147,7 +147,7 @@ export default function MessageInput({ onSend }) {
             onKeyDown={handleKeyDown}
             placeholder="Type a message or paste a URL..."
             rows={1}
-            className="flex-1 bg-transparent resize-none text-sm focus:outline-none placeholder:text-gray-500 max-h-32"
+            className="flex-1 bg-transparent resize-none text-base md:text-sm focus:outline-none placeholder:text-gray-500 max-h-32"
             style={{ minHeight: '24px' }}
           />
           <button

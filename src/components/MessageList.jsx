@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import LinkPreview from './LinkPreview.jsx';
 
 function formatTime(dateStr) {
@@ -40,17 +40,31 @@ function parseMetadata(metadata) {
   }
 }
 
-export default function MessageList({ messages, currentUser }) {
+export default function MessageList({ messages, currentUser, hasEarlier, loadingEarlier, onLoadEarlier }) {
   const endRef = useRef(null);
+  const newestId = messages[messages.length - 1]?.id;
+  const metas = useMemo(() => messages.map((m) => parseMetadata(m.metadata)), [messages]);
 
+  // Follow new messages at the bottom, but stay put when older history is loaded above.
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages.length]);
+  }, [newestId]);
 
   let lastDate = null;
 
   return (
-    <div className="flex-1 overflow-y-auto px-5 py-4 space-y-0.5">
+    <div className="flex-1 overflow-y-auto px-3 md:px-5 py-4 space-y-0.5">
+      {hasEarlier && (
+        <div className="text-center pb-2">
+          <button
+            onClick={onLoadEarlier}
+            disabled={loadingEarlier}
+            className="text-xs text-gray-400 hover:text-white px-3 py-1 rounded-full bg-gray-800/60 disabled:opacity-50"
+          >
+            {loadingEarlier ? 'Loading…' : 'Load earlier messages'}
+          </button>
+        </div>
+      )}
       {messages.map((msg, i) => {
         const renderKey = `${String(msg.id ?? 'msg')}-${msg.created_at ?? 'time'}-${i}`;
         const msgDate = formatDate(msg.created_at);
@@ -58,17 +72,20 @@ export default function MessageList({ messages, currentUser }) {
         lastDate = msgDate;
 
         const prevMsg = messages[i - 1];
-        const sameAuthor = prevMsg && prevMsg.user_id === msg.user_id && !showDate;
+        const meta = metas[i];
+        // Imported (e.g. Discord) messages have no user_id; group them by their original author instead.
+        const importedAuthor = !msg.user_id ? meta.author : null;
+        const sameAuthor = prevMsg && authorKey(prevMsg, metas[i - 1]) === authorKey(msg, meta) && !showDate;
         const timeDiff = prevMsg
           ? new Date(msg.created_at) - new Date(prevMsg.created_at)
           : Infinity;
         const isCurrentUser = msg.user_id === currentUser?.id;
         const resolvedName = isCurrentUser
           ? (currentUser?.name || msg.author_name || currentUser?.email || msg.author_email)
-          : (msg.author_name || msg.author_email);
+          : (msg.author_name || msg.author_email || importedAuthor?.name);
         const resolvedAvatar = isCurrentUser
           ? (currentUser?.avatar_url || msg.author_avatar)
-          : msg.author_avatar;
+          : (msg.author_avatar || importedAuthor?.avatar);
         // Keep sender identity visible for your own new messages.
         const compact = !isCurrentUser && sameAuthor && timeDiff < 300000;
 
@@ -82,7 +99,6 @@ export default function MessageList({ messages, currentUser }) {
         }
 
         if (msg.type === 'ai') {
-          const meta = parseMetadata(msg.metadata);
           const brandDomain = meta.brandDomain;
           const brandLogo = meta.brandLogo;
           const faviconUrl = brandDomain ? `https://www.brandidentity.com/favicon/${brandDomain}` : null;
@@ -127,8 +143,16 @@ export default function MessageList({ messages, currentUser }) {
                     <span className="font-semibold text-sm">
                       {resolvedName || 'Unknown'}
                     </span>
+                    {meta.source === 'discord' && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/15 text-indigo-300">Discord</span>
+                    )}
                     <span className="text-xs text-gray-500">{formatTime(msg.created_at)}</span>
                   </div>
+                )}
+                {meta.replyTo && (
+                  <p className="text-xs text-gray-500 truncate border-l-2 border-gray-700 pl-2 my-0.5">
+                    ↪ <span className="text-gray-400">{meta.replyTo.author}</span> {meta.replyTo.excerpt}
+                  </p>
                 )}
                 <p className="text-sm text-gray-300 break-words whitespace-pre-wrap">{msg.body}</p>
                 {msg.attachments?.map((att, attIndex) => (
@@ -145,6 +169,11 @@ export default function MessageList({ messages, currentUser }) {
       <div ref={endRef} />
     </div>
   );
+}
+
+function authorKey(msg, meta) {
+  if (msg.user_id) return `u:${msg.user_id}`;
+  return meta.author?.id ? `x:${meta.author.id}` : `m:${msg.id}`;
 }
 
 function DateDivider({ date }) {
