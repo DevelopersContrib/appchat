@@ -63,7 +63,7 @@ function MessageBody({ text, myNames }) {
  * actions: { onReact(msg, emoji), onReply(msg), onThread(msg), onEdit(msg), onDelete(msg) } — each optional.
  * inThread: rendering inside the thread panel (no thread buttons/counts, no auto-load-earlier).
  */
-export default function MessageList({ messages, currentUser, hasEarlier, loadingEarlier, onLoadEarlier, canModerate, actions = {}, inThread = false }) {
+export default function MessageList({ messages, currentUser, hasEarlier, loadingEarlier, onLoadEarlier, canModerate, actions = {}, inThread = false, focusId = null }) {
   const endRef = useRef(null);
   const newestId = messages[messages.length - 1]?.id;
   const metas = useMemo(() => messages.map((m) => parseMetadata(m.metadata)), [messages]);
@@ -76,9 +76,14 @@ export default function MessageList({ messages, currentUser, hasEarlier, loading
   }, [currentUser]);
 
   // Follow new messages at the bottom, but stay put when older history is loaded above.
+  // When opened on a specific message (from search), scroll to it instead.
   useEffect(() => {
+    if (focusId) {
+      document.getElementById(`msg-${focusId}`)?.scrollIntoView({ block: 'center' });
+      return;
+    }
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [newestId]);
+  }, [newestId, focusId]);
 
   useEffect(() => {
     if (!pickerFor) return;
@@ -181,7 +186,8 @@ export default function MessageList({ messages, currentUser, hasEarlier, loading
           <div key={renderKey}>
             {showDate && <DateDivider date={msgDate} />}
             <div
-              className={`group relative flex gap-3 rounded px-2 ${compact ? 'py-0.5' : 'py-2 mt-2'} ${mentionsMe ? 'bg-[#fdcb6e]/5 border-l-2 border-[#fdcb6e]/60' : 'hover:bg-gray-800/50'}`}
+              id={`msg-${msg.id}`}
+              className={`group relative flex gap-3 rounded px-2 ${compact ? 'py-0.5' : 'py-2 mt-2'} ${msg.id === focusId ? 'bg-[#8b93ff]/15 ring-1 ring-[#8b93ff]/50' : mentionsMe ? 'bg-[#fdcb6e]/5 border-l-2 border-[#fdcb6e]/60' : 'hover:bg-gray-800/50'}`}
               onTouchStart={() => { if (canAct(msg)) pressTimer.current = setTimeout(() => setSheetFor(msg), 450); }}
               onTouchEnd={() => clearTimeout(pressTimer.current)}
               onTouchMove={() => clearTimeout(pressTimer.current)}

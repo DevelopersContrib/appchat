@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from 'react';
 import InstallAppButton from './InstallAppButton.jsx';
 import NotificationsButton from './NotificationsButton.jsx';
 import { NewChannelDialog, BrowseChannelsDialog, ChannelSettingsDialog } from './ChannelDialogs.jsx';
+import SearchDialog from './SearchDialog.jsx';
 import { usePresenceBeacon, publishRoster, PresenceDot } from './presence.jsx';
 
 const ROSTER_POLL_MS = 15000;
@@ -51,7 +52,7 @@ export default function Sidebar({ tenant, channels, dms: initialDms = [], user, 
   const membersById = Object.fromEntries(roster.members.map((m) => [m.id, m]));
   // On phones the sidebar is a drawer; it starts open on the workspace home, where there's nothing else to show.
   const [mobileOpen, setMobileOpen] = useState(!inChannel);
-  const [dialog, setDialog] = useState(null); // 'new' | 'browse'
+  const [dialog, setDialog] = useState(null); // 'new' | 'browse' | 'search'
   const [settingsFor, setSettingsFor] = useState(null);
   const [menu, setMenu] = useState(null); // { x, y, kind: 'channel' | 'dm', id, name }
   const isAdmin = ['owner', 'admin'].includes(role);
@@ -70,6 +71,30 @@ export default function Sidebar({ tenant, channels, dms: initialDms = [], user, 
   useEffect(() => {
     if (inChannel) setMobileOpen(false);
   }, [pathname, inChannel]);
+
+  // Ctrl/⌘+K opens search from anywhere in the workspace.
+  useEffect(() => {
+    const onKey = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setDialog('search');
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  async function openDm(userId) {
+    const res = await fetch('/api/dms', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tenant: currentSlug, userId }),
+    });
+    if (res.ok) {
+      router.push((await res.json()).url);
+      loadRoster();
+    }
+  }
 
   useEffect(() => {
     if (!menu) return;
@@ -169,6 +194,17 @@ export default function Sidebar({ tenant, channels, dms: initialDms = [], user, 
         )}
       </div>
 
+      <div className="px-3 pt-3">
+        <button
+          onClick={() => setDialog('search')}
+          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-800/70 hover:bg-gray-800 text-sm text-gray-400"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeWidth={2} d="M21 21l-4.35-4.35M11 18a7 7 0 100-14 7 7 0 000 14z" /></svg>
+          Search
+          <kbd className="ml-auto hidden md:inline text-[10px] text-gray-500 border border-gray-700 rounded px-1">⌘K</kbd>
+        </button>
+      </div>
+
       <nav className="flex-1 overflow-y-auto p-3 space-y-1">
         <p className="text-xs text-gray-500 uppercase tracking-wider px-2 mb-2 flex items-center justify-between">
           Channels
@@ -256,6 +292,7 @@ export default function Sidebar({ tenant, channels, dms: initialDms = [], user, 
     )}
     {dialog === 'new' && <NewChannelDialog tenantSlug={currentSlug} onClose={() => setDialog(null)} />}
     {dialog === 'browse' && <BrowseChannelsDialog tenantSlug={currentSlug} onClose={() => setDialog(null)} />}
+    {dialog === 'search' && <SearchDialog tenantSlug={currentSlug} channels={channels} onClose={() => setDialog(null)} onOpenDm={openDm} />}
     {settingsFor && <ChannelSettingsDialog channelId={settingsFor} tenantSlug={currentSlug} onClose={() => setSettingsFor(null)} />}
     </>
   );

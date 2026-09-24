@@ -4,8 +4,9 @@ import { queryOne, query } from '@/lib/db.js';
 import ChannelView from '@/components/ChannelView.jsx';
 import { MESSAGE_SELECT, hydrateMessages } from '@/lib/messages.js';
 
-export default async function ChannelPage({ params }) {
+export default async function ChannelPage({ params, searchParams }) {
   const { tenant: slug, channelId } = await params;
+  const { m: focusParam, t: threadParam } = await searchParams;
   const user = await getSession();
   if (!user) redirect('/login');
 
@@ -24,15 +25,38 @@ export default async function ChannelPage({ params }) {
   );
   if (!isMember) redirect(`/${slug}`);
 
-  // Latest 100 top-level messages, oldest first (thread replies live in the thread panel).
-  const messages = await hydrateMessages(
-    (await query(
+  // ?m=<id> (from search): load the conversation around that message instead of the latest.
+  const focus = focusParam
+    ? await queryOne(
+        'SELECT id, created_at FROM messages WHERE id = ? AND channel_id = ? AND deleted_at IS NULL AND thread_id IS NULL',
+        [focusParam, channelId]
+      )
+    : null;
+
+  let rows;
+  if (focus) {
+    const before = await query(
+      `${MESSAGE_SELECT} WHERE m.channel_id = ? AND m.deleted_at IS NULL AND m.thread_id IS NULL
+         AND (m.created_at < ? OR (m.created_at = ? AND m.id < ?))
+       ORDER BY m.created_at DESC, m.id DESC LIMIT 40`,
+      [channelId, focus.created_at, focus.created_at, focus.id]
+    );
+    const after = await query(
+      `${MESSAGE_SELECT} WHERE m.channel_id = ? AND m.deleted_at IS NULL AND m.thread_id IS NULL
+         AND (m.created_at > ? OR (m.created_at = ? AND m.id >= ?))
+       ORDER BY m.created_at ASC, m.id ASC LIMIT 41`,
+      [channelId, focus.created_at, focus.created_at, focus.id]
+    );
+    rows = [...before.reverse(), ...after];
+  } else {
+    // Latest 100 top-level messages, oldest first (thread replies live in the thread panel).
+    rows = (await query(
       `${MESSAGE_SELECT} WHERE m.channel_id = ? AND m.deleted_at IS NULL AND m.thread_id IS NULL
        ORDER BY m.created_at DESC, m.id DESC LIMIT 100`,
       [channelId]
-    )).reverse(),
-    user.id
-  );
+    )).reverse();
+  }
+  const messages = await hydrateMessages(rows, user.id);
 
   const members = await query(
     `SELECT u.id, u.name, u.email, u.avatar_url, u.last_seen_at
@@ -53,6 +77,9 @@ export default async function ChannelPage({ params }) {
 
   return (
     <ChannelView
+      key={focus ? `focus-${focus.id}` : 'latest'}
+      focusId={focus?.id || null}
+      initialThreadId={focus && threadParam ? Number(threadParam) : null}
       canModerate={canModerate}
       dmPeer={dmPeer ? JSON.parse(JSON.stringify(dmPeer)) : null}
       channel={channel}

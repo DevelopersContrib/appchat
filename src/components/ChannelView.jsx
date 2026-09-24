@@ -28,7 +28,7 @@ function mergeUniqueMessages(existing, incoming) {
   });
 }
 
-export default function ChannelView({ channel, initialMessages, members, currentUser, tenantSlug, dmPeer, canModerate }) {
+export default function ChannelView({ channel, initialMessages, members, currentUser, tenantSlug, dmPeer, canModerate, focusId, initialThreadId }) {
   const roster = useRoster();
   const peerPresence = dmPeer ? roster?.members?.find((m) => m.id === dmPeer.id) : null;
   const [messages, setMessages] = useState(() => mergeUniqueMessages([], initialMessages || []));
@@ -38,11 +38,11 @@ export default function ChannelView({ channel, initialMessages, members, current
   const [sprintPanel, setSprintPanel] = useState({ open: false, query: '' });
   const [commandError, setCommandError] = useState('');
   const messagesRef = useRef(messages);
-  const [hasEarlier, setHasEarlier] = useState((initialMessages || []).length >= 100);
+  const [hasEarlier, setHasEarlier] = useState((initialMessages || []).length >= 100 || Boolean(focusId));
   const [loadingEarlier, setLoadingEarlier] = useState(false);
   const [replyTo, setReplyTo] = useState(null);
   const [editing, setEditing] = useState(null);
-  const [threadFor, setThreadFor] = useState(null);
+  const [threadFor, setThreadFor] = useState(initialThreadId || null);
   const [typing, setTyping] = useState([]);
   // Server clock of the last sync, so the next one only returns what changed since.
   const sinceRef = useRef(null);
@@ -110,11 +110,13 @@ export default function ChannelView({ channel, initialMessages, members, current
     setReplyTo(msg);
   }
 
+  // Viewing an older spot (from search): don't stream newer history in; "Jump to latest" goes live again.
   useEffect(() => {
+    if (focusId) return;
     pollMessages();
     pollRef.current = setInterval(pollMessages, 1200);
     return () => clearInterval(pollRef.current);
-  }, [pollMessages]);
+  }, [pollMessages, focusId]);
 
   // The Brand Agent lives in channels, not in direct messages.
   useEffect(() => {
@@ -318,7 +320,14 @@ export default function ChannelView({ channel, initialMessages, members, current
         </div>
       </header>
 
+      {focusId && (
+        <div className="flex items-center justify-center gap-3 px-4 py-1.5 bg-[#8b93ff]/10 border-b border-[#8b93ff]/20 text-xs text-gray-300">
+          Viewing an earlier message
+          <a href={`/${tenantSlug}/c/${channel.id}`} className="px-2 py-0.5 rounded bg-[#8b93ff]/20 text-white hover:bg-[#8b93ff]/30">Jump to latest ↓</a>
+        </div>
+      )}
       <MessageList
+        focusId={focusId}
         messages={messages}
         currentUser={currentUser}
         hasEarlier={hasEarlier}
