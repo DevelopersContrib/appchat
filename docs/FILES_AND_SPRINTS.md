@@ -12,7 +12,8 @@ then redirects to a 5-minute signed link. Limit: `MAX_UPLOAD_MB` (default 25).
 
 Env (same names as vnoc/manage-app): `AWS_S3_BUCKET_DOMAIN`, `AWS_S3_REGION`, `AWS_S3_ACCESS_KEY_ID`, `AWS_S3_SECRET_ACCESS_KEY`.
 
-**One-time bucket setup:** browsers can only upload directly if the bucket allows it (CORS). Add this to the bucket's CORS config:
+**Bucket CORS** (applied to `vnoc-domain-files` on 2026-09-24 as rule `appchat-direct-uploads`): browsers can only upload
+directly if the bucket allows the page's origin. To add a new domain, update the rule's `AllowedOrigins`:
 
 ```json
 [
