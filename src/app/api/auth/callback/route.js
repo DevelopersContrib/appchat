@@ -25,6 +25,8 @@ export async function POST(request) {
 
     let redirectTo = (await resolveTenantSlugForHost(request.headers.get('host'))) ? '/' : '/dashboard';
     if (invite) redirectTo = (await acceptInvite(invite, user.id)).url;
+    const next = request.cookies.get('appchat_next')?.value;
+    if (next?.startsWith('/oauth/authorize')) redirectTo = next;
 
     const res = NextResponse.json({ user: { id: user.id, email: user.email }, redirectTo });
     res.cookies.set('appchat_session', token, {
@@ -35,6 +37,7 @@ export async function POST(request) {
       path: '/',
     });
     if (invite) res.cookies.delete(INVITE_COOKIE);
+    if (next) res.cookies.delete('appchat_next');
 
     return res;
   } catch (err) {

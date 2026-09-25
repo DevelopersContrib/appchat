@@ -8,6 +8,8 @@ import { postTextMessage } from '@/lib/post-message.js';
 import { getVnocAccess, searchSprints, resolveDomain, createTask, taskUrl } from '@/lib/vnoc.js';
 import { ONLINE_WINDOW_SECONDS } from '@/lib/presence.js';
 import { APP_URL } from '@/lib/email.js';
+import { CORS } from '@/lib/oauth-http.js';
+import { issuerFor } from '@/lib/oauth.js';
 
 // AppChat MCP server (Streamable HTTP, JSON responses). Auth: "Authorization: Bearer appc_…" —
 // a personal connection key from AppChat; every tool acts as that person and sees only what they can.
@@ -264,7 +266,14 @@ export async function POST(request) {
   if (!user) {
     return NextResponse.json(
       { jsonrpc: '2.0', id: null, error: { code: -32001, message: 'Missing or invalid AppChat connection key (Authorization: Bearer appc_…)' } },
-      { status: 401, headers: { 'WWW-Authenticate': 'Bearer realm="appchat"' } }
+      {
+        status: 401,
+        headers: {
+          ...CORS,
+          'Access-Control-Expose-Headers': 'WWW-Authenticate',
+          'WWW-Authenticate': `Bearer realm="appchat", resource_metadata="${issuerFor(request)}/.well-known/oauth-protected-resource"`,
+        },
+      }
     );
   }
   const body = await request.json().catch(() => null);
@@ -272,10 +281,14 @@ export async function POST(request) {
 
   if (Array.isArray(body)) {
     const out = (await Promise.all(body.map((m) => handle(user, m)))).filter(Boolean);
-    return out.length ? NextResponse.json(out) : new NextResponse(null, { status: 202 });
+    return out.length ? NextResponse.json(out, { headers: CORS }) : new NextResponse(null, { status: 202, headers: CORS });
   }
   const out = await handle(user, body);
-  return out ? NextResponse.json(out) : new NextResponse(null, { status: 202 });
+  return out ? NextResponse.json(out, { headers: CORS }) : new NextResponse(null, { status: 202, headers: CORS });
+}
+
+export function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: { ...CORS, 'Access-Control-Expose-Headers': 'WWW-Authenticate' } });
 }
 
 // This server doesn't push server-initiated messages, so there's no SSE stream.

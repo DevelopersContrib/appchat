@@ -19,7 +19,8 @@ export async function userFromBearer(request) {
   const m = /^Bearer\s+(appc_[A-Za-z0-9_-]{20,})$/.exec(request.headers.get('authorization') || '');
   if (!m) return null;
   const row = await queryOne(
-    `SELECT u.*, t.id AS token_id, t.name AS token_name FROM api_tokens t JOIN users u ON u.id = t.user_id WHERE t.token_hash = ?`,
+    `SELECT u.*, t.id AS token_id, t.name AS token_name FROM api_tokens t JOIN users u ON u.id = t.user_id
+     WHERE t.token_hash = ? AND (t.expires_at IS NULL OR t.expires_at > NOW())`,
     [hash(m[1])]
   );
   if (!row) return null;
@@ -27,10 +28,22 @@ export async function userFromBearer(request) {
   return row;
 }
 
+// Personal keys, plus connected apps (OAuth access tokens).
 export function listApiTokens(userId) {
-  return query('SELECT id, name, token_prefix, last_used_at, created_at FROM api_tokens WHERE user_id = ? ORDER BY id DESC', [userId]);
+  return query(
+    `SELECT id, name, token_prefix, last_used_at, created_at, oauth_client_id FROM api_tokens
+     WHERE user_id = ? AND (expires_at IS NULL OR expires_at > NOW()) ORDER BY id DESC`,
+    [userId]
+  );
 }
 
-export function revokeApiToken(userId, id) {
-  return query('DELETE FROM api_tokens WHERE user_id = ? AND id = ?', [userId, id]);
+// Revoking an app's key also disconnects the app (its refresh tokens and other access tokens).
+export async function revokeApiToken(userId, id) {
+  const row = await queryOne('SELECT oauth_client_id FROM api_tokens WHERE user_id = ? AND id = ?', [userId, id]);
+  if (row?.oauth_client_id) {
+    await query('DELETE FROM api_tokens WHERE user_id = ? AND oauth_client_id = ?', [userId, row.oauth_client_id]);
+    await query('DELETE FROM oauth_refresh_tokens WHERE user_id = ? AND client_id = ?', [userId, row.oauth_client_id]);
+    return;
+  }
+  await query('DELETE FROM api_tokens WHERE user_id = ? AND id = ?', [userId, id]);
 }

@@ -86,7 +86,14 @@ export default function ConnectAiDialog({ onClose }) {
             text={JSON.stringify({ appchat: { command: 'npx', args: ['-y', 'mcp-remote', MCP_URL, '--header', `Authorization: Bearer ${key}`] } }, null, 2)}
           />
           <Snippet label="Any MCP client (Streamable HTTP)" text={`URL: ${MCP_URL}\nHeader: Authorization: Bearer ${key}`} />
-          <p className="text-xs text-gray-500">claude.ai and the ChatGPT app need one-click sign-in (OAuth) for custom connectors — that’s coming next.</p>
+          <div className="rounded-lg border border-gray-800 p-3 space-y-1">
+            <p className="text-xs font-semibold text-gray-300">claude.ai or the ChatGPT app — no key needed</p>
+            <p className="text-xs text-gray-400">
+              claude.ai: Settings → Connectors → Add custom connector. ChatGPT: Settings → Connectors (developer mode) → Create.
+              Use the URL below; you’ll be asked to sign in to AppChat and click Allow.
+            </p>
+            <div className="flex items-center gap-2"><code className="flex-1 text-xs">{MCP_URL}</code><Copy text={MCP_URL} /></div>
+          </div>
         </div>
 
         {tokens?.length > 0 && (
@@ -96,7 +103,7 @@ export default function ConnectAiDialog({ onClose }) {
               {tokens.map((t) => (
                 <li key={t.id} className="flex items-center gap-2 px-3 py-2">
                   <span className="flex-1 min-w-0">
-                    <span className="block text-gray-200">{t.name}</span>
+                    <span className="block text-gray-200">{t.name}{t.oauth_client_id ? ' · connected app' : ''}</span>
                     <span className="block text-gray-500">{t.token_prefix}… · {t.last_used_at ? `last used ${new Date(t.last_used_at).toLocaleString()}` : 'never used'}</span>
                   </span>
                   <button onClick={() => revoke(t.id)} className="px-2 py-1 rounded text-red-400 hover:bg-red-500/10">Revoke</button>
