@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { timingSafeEqual } from 'crypto';
 import { query, queryOne, insert } from '@/lib/db.js';
 
-// Called by the Cloudflare email Worker (workers/inbound-email) with a parsed email:
+// Called by the shared email-router Worker (workers/email-router, route for c-<token>@appchat.com) with a parsed email:
 // { to, from, fromName, subject, text, attachments: [{ filename, mimeType, size }] }
 // Auth: header x-inbound-secret = INBOUND_EMAIL_SECRET.
 export async function POST(request) {

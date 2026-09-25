@@ -1,5 +1,5 @@
 {
-  "name": "appchat-inbound-email",
+  "name": "email-router",
   "private": true,
   "type": "module",
   "dependencies": {

@@ -1,0 +1,9 @@
+# Shared network email router (not only AppChat). Deploy with:
+#   CLOUDFLARE_ACCOUNT_ID=04366e6a18a185bcae6be03a3bd99aca npx wrangler deploy
+name = "email-router"
+main = "src/email_router.js"
+account_id = "04366e6a18a185bcae6be03a3bd99aca"
+compatibility_date = "2026-04-01"
+
+[vars]
+APPCHAT_URL = "https://www.appchat.com"
