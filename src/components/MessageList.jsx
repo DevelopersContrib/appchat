@@ -215,6 +215,7 @@ export default function MessageList({ messages, currentUser, hasEarlier, loading
                     <span className="font-semibold text-sm">{resolvedName || 'Unknown'}</span>
                     {meta.source === 'discord' && <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/15 text-indigo-300">Discord</span>}
                     {meta.source === 'slack' && <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#4A154B]/40 text-pink-200">Slack</span>}
+                    {meta.source === 'email' && <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-700 text-gray-200">Email</span>}
                     {meta.via && <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#6c5ce7]/20 text-[#a29bfe]" title="Posted through an AI assistant">✨ via {meta.via}</span>}
                     <span className="text-xs text-gray-500">{formatTime(msg.created_at)}</span>
                   </div>
@@ -224,7 +225,8 @@ export default function MessageList({ messages, currentUser, hasEarlier, loading
                     ↪ <span className="text-gray-300">{replyTo.author}</span> {replyTo.excerpt}
                   </p>
                 )}
-                {meta.card?.kind === 'poll' ? <PollCard card={meta.card} poll={msg.poll} onVote={(i) => actions.onVote?.(msg, i)} />
+                {meta.card?.kind === 'email' ? <EmailCard card={meta.card} body={msg.body} />
+                  : meta.card?.kind === 'poll' ? <PollCard card={meta.card} poll={msg.poll} onVote={(i) => actions.onVote?.(msg, i)} />
                   : meta.card?.kind === 'kudos' ? <KudosCard card={meta.card} />
                   : meta.card?.kind === 'debrief' ? <DebriefCard card={meta.card} /> : meta.card?.kind === 'meet' ? <MeetCard card={meta.card} /> : meta.card ? <VnocCard card={meta.card} /> : !(msg.body === 'Shared attachment' && msg.attachments?.length) && (
                   <MessageBody text={msg.body} myNames={myNames} />
@@ -321,6 +323,17 @@ function SheetItem({ children, onClick, danger }) {
     <button onClick={onClick} className={`w-full text-left px-4 py-3 rounded-xl bg-gray-800/60 text-sm ${danger ? 'text-red-400' : 'text-gray-100'}`}>
       {children}
     </button>
+  );
+}
+
+function EmailCard({ card, body }) {
+  const text = String(body || '').replace(/^📧 .*\n\n?/, '');
+  return (
+    <div className="mt-1 max-w-xl rounded-xl border border-gray-700 bg-gray-900/70 px-3 py-2.5">
+      <p className="text-[10px] uppercase tracking-wide text-gray-400">📧 Email{card.fromName || card.from ? ` from ${card.fromName || card.from}` : ''}</p>
+      <p className="text-sm font-semibold text-gray-100">{card.subject}</p>
+      {text && <p className="mt-1 text-sm text-gray-300 whitespace-pre-wrap break-words line-clamp-[12]">{text}</p>}
+    </div>
   );
 }
 

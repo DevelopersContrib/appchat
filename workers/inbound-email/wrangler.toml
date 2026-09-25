@@ -1,0 +1,7 @@
+name = "appchat-inbound-email"
+main = "worker.js"
+compatibility_date = "2026-09-01"
+
+[vars]
+APPCHAT_URL = "https://www.appchat.com"
+# Set the secret with: wrangler secret put INBOUND_EMAIL_SECRET

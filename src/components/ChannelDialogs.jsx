@@ -304,6 +304,8 @@ export function ChannelSettingsDialog({ channelId, tenantSlug, onClose }) {
             </ul>
           </section>
 
+          <ChannelEmail channelId={channelId} />
+
           <section className="flex flex-wrap gap-2 pt-2 border-t border-gray-800">
             {info.isMember && (
               <button onClick={leave} className="px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-sm">Leave channel</button>
@@ -315,5 +317,42 @@ export function ChannelSettingsDialog({ channelId, tenantSlug, onClose }) {
         </div>
       )}
     </Modal>
+  );
+}
+
+// "Email into this channel": forward or send email to the address and it posts here.
+function ChannelEmail({ channelId }) {
+  const [info, setInfo] = useState(null);
+  const [copied, setCopied] = useState(false);
+  const load = () => api(`/api/channels/${channelId}/email`).then(setInfo).catch(() => setInfo(null));
+  useEffect(() => { load(); }, [channelId]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!info?.enabled) return null;
+  const create = () => api(`/api/channels/${channelId}/email`, { method: 'POST' }).then((d) => setInfo((i) => ({ ...i, ...d })));
+  const off = () => api(`/api/channels/${channelId}/email`, { method: 'DELETE' }).then((d) => setInfo((i) => ({ ...i, ...d })));
+  return (
+    <section className="space-y-2">
+      <h3 className="text-sm font-semibold">Email into this channel</h3>
+      {info.address ? (
+        <>
+          <div className="flex items-center gap-2 rounded-lg bg-gray-950 border border-gray-800 px-3 py-2">
+            <code className="flex-1 min-w-0 truncate text-xs">{info.address}</code>
+            <button onClick={async () => { await navigator.clipboard?.writeText(info.address); setCopied(true); setTimeout(() => setCopied(false), 1500); }} className="px-2 py-1 rounded bg-gray-800 text-[11px]">
+              {copied ? 'Copied' : 'Copy'}
+            </button>
+          </div>
+          <p className="text-xs text-gray-500">Emails sent or forwarded here appear in the channel.</p>
+          {info.canManage && (
+            <div className="flex gap-2 text-xs">
+              <button onClick={create} className="px-2 py-1 rounded bg-gray-800 hover:bg-gray-700">New address</button>
+              <button onClick={off} className="px-2 py-1 rounded text-red-400 hover:bg-red-500/10">Turn off</button>
+            </div>
+          )}
+        </>
+      ) : info.canManage ? (
+        <button onClick={create} className="px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-sm">Create an email address</button>
+      ) : (
+        <p className="text-xs text-gray-500">No email address yet — a channel admin can create one.</p>
+      )}
+    </section>
   );
 }

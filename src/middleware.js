@@ -3,7 +3,7 @@ import { jwtVerify } from 'jose';
 import { tenantSlugForHost, isPlatformHost } from './lib/hosts.js';
 
 // /api/mcp authenticates with a personal connection key (Bearer), not the session cookie.
-const PUBLIC_PATHS = ['/', '/login', '/join', '/about', '/contact', '/privacy', '/terms', '/api/auth', '/api/rooms/public', '/api/cron', '/api/mcp'];
+const PUBLIC_PATHS = ['/', '/login', '/join', '/about', '/contact', '/privacy', '/terms', '/api/auth', '/api/rooms/public', '/api/cron', '/api/mcp', '/api/inbound-email'];
 const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET);
 
 // Paths that are shared app routes, not tenant pages; never prefix these with a tenant slug.
